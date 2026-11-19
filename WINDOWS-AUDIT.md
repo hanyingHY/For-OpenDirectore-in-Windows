@@ -61,6 +61,17 @@ desktop.6 新增：画布自动创建节点会避让已占位置（64 单位间�
 
 不包含什么：这不是装机验收。真实安装包仍要在 Windows runner 上按下面的「最短复验路线」跑；本轮没有构建 EXE，也没有把 `scripts/smoke.ps1` 的结果算进这里。`Host.cs` 退出确认的计数选择器 `'.cw-render-status progress,.cw-timeline-pending:not(:has(.cw-timeline-pending-error))'`：失败卡仍带 `.cw-timeline-pending-error`（不计入「正在导出」），且现在用户可以自己关掉它，所以「状态未知」的弹窗只会更少。**已知边界**：空时间线守卫把第一次 `setState` 移到保存往返之后，因此「点击输出 → 卡片出现」这段预检窗口在 DOM 上无痕，恰在此间退出不会报「导出 1」；此时本地编码尚未开始、文档写入仍是带版本号的保存命令，不会丢用户内容。彻底覆盖需要预检期渲染一个 DOM 标记，而那标记对合法拒绝也会闪一下——正是本补丁要消灭的形态，故不做，只记录。
 
+### 本轮 CI 的打包与装机（desktop.9 @ ab3f0585）
+
+| 项 | 结果 |
+| --- | --- |
+| 安装包 | `windows-2022` 出包成功，`Windows-installer-x64` = 194,852,844 B（无 Authenticode 签名） |
+| 装机后验收 | `smoke.ps1`（`OD_VERIFY_RENDER=1`）通过：静默安装 → 启动 → 健康检查 → 真实渲染 |
+| Agent | `agent-check.ps1` 通过（技能 + 工程写入，确定性假模型，不触网） |
+| 装机证据 | `Windows-native-evidence` = 4,841,972 B，内含 `delivery/windows-*.png`、`*.mp4`、`timeline-export.mp4` |
+| 发布签名 | `sign-update` / `update-handoff` 被仓库与分支门槛跳过（`hanyingHY/For-OpenDirector` + `main` 才跑），与既往一致 |
+| 未覆盖 | 人在场时的桌面交互：双击安装、自定义目录、中文 IME、退出确认弹窗的肉眼验收；runner 是服务会话，给不了这一层 |
+
 ### 沙箱验收的可复现口径（重要）
 
 - 录像与验收用 **同一个** Chromium 与同一份 `package-lock.json`；`verification/reel.mjs` 只用 CDP 截流 + 浏览器 `MediaRecorder('video/mp4;codecs=avc1')`，不需要 ffmpeg，因此换一台机器也能重算。
@@ -71,3 +82,7 @@ desktop.6 新增：画布自动创建节点会避让已占位置（64 单位间�
 ### 与上游 PR #397 的对照（结论：思路可借、壳不换）
 
 见 [DESKTOP-PARITY-REVIEW.md](DESKTOP-PARITY-REVIEW.md) §5。要点：#397 用 Electron，本仓库用 WebView2，二者对 RFC 的取舍不同；值得借的是它把「正在导出」由渲染进程 **显式上报**（`ipcMain.on('desktop:exporting')`）而不是像我们这样反查 DOM 类名，以及 `docs/architecture/desktop.md` 那份宿主生命周期文档。冒烟/构建同 job、产物与录像同构建的做法已由 `verification/reel.mjs` 在 Linux 侧对齐。
+
+**证据取用**：CI 工件需要登录 GitHub 在 run 页面下载；本沙箱到 `*.blob.core.windows.net`
+与 `results-receiver.actions.githubusercontent.com` 的连接被代理截断（EOF），所以这两份证据文件
+没有随本轮一起落进仓库，README/AUDIT 里记的是我从 API 读到的工件名与字节数。

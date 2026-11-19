@@ -12,7 +12,17 @@
 - 真正的编码失败给出三个出口：`编辑时间线`（直达失败原因）· `重试输出` · `关闭卡片`（右上角 ✕）。关闭会中断在途渲染、丢弃缓存结果、释放被 `blockedItemId` 挂住的其它时间线。
 - 键盘同样可达：失败时焦点落在 ✕ 上，`Esc` 即离开这张卡（必须在 document 的 capture 阶段接管——工作区根节点的 capture 处理器会先吃掉它，这一点是实测撞出来的）。
 - 证据是同一条旅程在打补丁前后的两段实机录像：[修复前：7 种退路全部无效](delivery/od-timeline-output-before.mp4)（[同帧截图](delivery/timeline-before-stuck.png)） · [修复后：toast、三个出口、`Esc`、关闭后仍能真实渲染并下载 MP4](delivery/od-timeline-output-after.mp4)（[同帧截图](delivery/timeline-after-failed-card.png)） · [应用自己导出的 640×400 H.264](delivery/od-timeline-app-export.mp4)。两段录像在同一环境、同一条脚本下各录一次（`OD_REEL=before|after`），可直接逐帧对比。录像由 `verification/reel.mjs` 在真实浏览器窗口上生成（CDP 截流 → 浏览器 H.264 编码），**不依赖 ffmpeg**；其中的等待时间被压缩，界面动效未丢帧。逐条判据见 [DESKTOP-PARITY-REVIEW.md](DESKTOP-PARITY-REVIEW.md) §0。
-- 文件名里的 `od-` 而不是 `windows-`：这两段录像是 **同一份 React bundle 在测试机浏览器里** 的记录，不是装机窗口录像。安装包构建与装机验收仍须在 Windows runner 上跑（下文的 Windows 构建记录是 desktop.7 那一版）；本轮没有产出新的 EXE，也没有把装机结论算进这里。
+- 文件名里的 `od-` 而不是 `windows-`：这两段录像是 **同一份 React bundle 在测试机浏览器里** 的记录，不是装机窗口录像——两者不能互相冒充。
+- 本轮同时把 desktop.9 推进到了真装机：`Windows x64 desktop` 在 `windows-2022` 上跑绿
+  （[run 44519092194](https://github.com/hanyingHY/For-OpenDirectore-in-Windows/actions/runs/44519092194)）——
+  `package.py` 装配 → `agent-check.ps1`（确定性模型的 Native Agent 技能与工程写入）→ `makensis` 出包 →
+  `smoke.ps1`（`OD_VERIFY_RENDER=1`，静默安装后起应用、过健康检查、走真实渲染）→ 上传
+  `Windows-installer-x64`（194,852,844 B）与 `Windows-native-evidence`（4,841,972 B，内含 runner 生成的
+  `delivery/windows-*.png` / `*.mp4` / `timeline-export.mp4`）。`sign-update` 与 `update-handoff` 按仓库/分支门槛跳过，与既往一致。
+  **仍未做的**：Authenticode 签名、以及人在场时的真桌面交互（双击安装、中文 IME、退出确认弹窗）——runner 是服务会话，
+  截图只证明像素可读，不证明交互可点。
+- 一个待查的观察：安装包比 desktop.7 的 138,799,603 B 大约 40%，而上游两个基线之间被跟踪内容只涨了 1 MB
+  （60.3 → 61.3 MB），所以差额不在上游素材里，应在运行时装配那一步。体积审计进了下面的计划。
 
 上一版（desktop.6 / desktop.7）的装机证据没有复制进本分支：安装包、`SHA256SUMS.txt`、实机窗口录像与截图保存在姊妹仓库 [hanyingHY/For-OpenDirector](https://github.com/hanyingHY/For-OpenDirector) 的发布草稿与 Actions 产物里（desktop.7 构建与验收：[安装包](https://github.com/hanyingHY/For-OpenDirector/actions/runs/44452250785/artifacts/14495997765) · [验收记录](https://github.com/hanyingHY/For-OpenDirector/actions/runs/44452250785)；desktop.6：[构建](https://github.com/hanyingHY/For-OpenDirector/actions/runs/44297067032) · [独立装机验收](https://github.com/hanyingHY/For-OpenDirector/actions/runs/44299900134)）。本仓库的 `delivery/` 只保留本轮生成的三个录像与页面入口，大二进制不进 Git。
 

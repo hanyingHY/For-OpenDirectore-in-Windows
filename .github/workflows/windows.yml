@@ -1,0 +1,89 @@
+name: Windows x64 desktop
+on:
+  workflow_dispatch:
+  push:
+    paths: ["desktop/**", "patches/**", "scripts/**", "verification/**", "tests/**", ".github/workflows/windows.yml"]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  package:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.22.1'
+      - name: Assemble original UI, services and Windows runtime
+        run: python scripts/package.py
+      - name: Native Agent skill and project write (deterministic model)
+        timeout-minutes: 5
+        run: ./scripts/agent-check.ps1
+      - name: Compile installer
+        id: package
+        run: '& "${env:ProgramFiles(x86)}\NSIS\makensis.exe" /INPUTCHARSET UTF8 desktop\setup.nsi; exit $LASTEXITCODE'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Windows-installer-x64
+          path: delivery/*.exe
+          compression-level: 0
+      - name: Exercise installed application
+        timeout-minutes: 10
+        env:
+          OD_VERIFY_RENDER: '1'
+        run: ./scripts/smoke.ps1
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: Windows-native-evidence
+          if-no-files-found: warn
+          path: |
+            delivery/windows-*.png
+            delivery/windows-*.mp4
+            delivery/timeline-export.mp4
+  sign-update:
+    needs: package
+    if: github.repository == 'hanyingHY/For-OpenDirectore-in-Windows' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
+        with: {name: Windows-installer-x64, path: delivery}
+      - run: python3 scripts/update-manifest.py delivery
+      - uses: sigstore/gh-action-sigstore-python@790bc6befb9d733738f18d8f895854b453640ec9 # v3.5.0
+        with:
+          inputs: delivery/windows-update.json
+          release-signing-artifacts: false
+          verify: true
+          verify-cert-identity: https://github.com/${{ github.workflow_ref }}
+          verify-oidc-issuer: https://token.actions.githubusercontent.com
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Windows-update-metadata
+          path: delivery/windows-update.json*
+  update-handoff:
+    needs: sign-update
+    runs-on: windows-2022
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.12'}
+      - uses: actions/download-artifact@v4
+        with: {name: Windows-installer-x64, path: delivery}
+      - uses: actions/download-artifact@v4
+        with: {name: Windows-update-metadata, path: delivery}
+      - name: Exercise verified handoff and restart
+        shell: pwsh
+        run: |
+          python -m pip install sigstore==4.5.1
+          python -m unittest discover -s tests -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python verification/update_handoff.py
+          exit $LASTEXITCODE

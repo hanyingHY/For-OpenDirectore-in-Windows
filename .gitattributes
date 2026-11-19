@@ -1,0 +1,11 @@
+* text=auto
+*.cs text eol=lf
+*.ps1 text eol=crlf
+SHA256SUMS.txt text eol=lf
+*.mp4 binary
+*.png binary
+*.jpg binary
+*.canvas binary
+
+# Match the LF-only upstream source tarball on Windows checkouts.
+*.patch text eol=lf

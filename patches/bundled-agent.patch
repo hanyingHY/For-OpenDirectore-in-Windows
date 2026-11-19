@@ -1,0 +1,99 @@
+diff --git a/apps/api/src/opendirector_api/localization.py b/apps/api/src/opendirector_api/localization.py
+index 070df2a..3e3eb1b 100644
+--- a/apps/api/src/opendirector_api/localization.py
++++ b/apps/api/src/opendirector_api/localization.py
+@@ -76,7 +76,7 @@ ENGLISH_BY_CODE = {
+     "bigmodel_image_prompt": "Enter a GLM-Image prompt.",
+     "bigmodel_image_size": "GLM-Image requires a preset size, or dimensions of 1024–2048 in multiples of 32.",
+     "moss_layout_reference": "MOSS layout JSON does not accept additional text references. Put the requirements in the JSON or remove the text references.",
+-    "agent_dependency_unavailable": "Bundled Agent is unavailable. Reinstall with pip install --force-reinstall opendirector; for a source checkout, use pip install -e .",
++    "agent_dependency_unavailable": "The bundled Agent could not start. Reinstall OpenDirector using the trusted Windows installer, then restart the app.",
+     "invalid_input": "The request is invalid. Check the required fields and their formats.",
+     "invalid_project": "The project or asset identifier is invalid.",
+     "missing_object": "The requested item no longer exists.",
+diff --git a/packages/core/src/opendirector/agent/bundled_profile.py b/packages/core/src/opendirector/agent/bundled_profile.py
+new file mode 100644
+index 0000000..6ad7494
+--- /dev/null
++++ b/packages/core/src/opendirector/agent/bundled_profile.py
+@@ -0,0 +1,18 @@
++"""Storage for OpenDirector’s managed OpenCode, not the user’s standalone CLI."""
++import os
++from pathlib import Path
++
++from opendirector.installation import data_root
++
++
++def bundled_profile() -> Path:
++    home = os.environ.get('OPENDIRECTOR_BUNDLED_AGENT_HOME')
++    base = Path(home) if home else data_root() / '.opendirector' / 'agent-runtime'
++    # This is a storage compatibility epoch, not the desktop release number.
++    return base.resolve() / 'opencode-v1'
++
++
++def bundled_environment(config: Path) -> dict[str, str]:
++    profile = bundled_profile()
++    return {'XDG_CONFIG_HOME': str(config),
++            **{f'XDG_{key.upper()}_HOME': str(profile / key) for key in ('data', 'cache', 'state')}}
+diff --git a/packages/core/src/opendirector/agent/native.py b/packages/core/src/opendirector/agent/native.py
+index d2321b5..071e959 100644
+--- a/packages/core/src/opendirector/agent/native.py
++++ b/packages/core/src/opendirector/agent/native.py
+@@ -12,6 +12,7 @@ from tempfile import TemporaryDirectory
+ from urllib.request import getproxies
+ from uuid import UUID
+ 
++from opendirector.agent.bundled_profile import bundled_environment, bundled_profile
+ from opendirector.agent.model_gateway import ModelGateway
+ from opendirector.agent import cli_transport, deepseek
+ from opendirector.agent.cli_discovery import cli_executable
+@@ -28,7 +29,7 @@ from opendirector.domain.projects import ProjectError
+ from opendirector.integrations.chat_completions import ChatCompletions
+ 
+ 
+-BUNDLED_INSTALL_ERROR = ('内置 Agent 依赖安装不完整或无法运行，请重新执行 pip install --force-reinstall opendirector；源码安装使用 pip install -e .。')
++BUNDLED_INSTALL_ERROR = '内置 Agent 无法运行。请使用可信来源的 OpenDirector Windows 安装包重新安装，然后重启应用。'
+ 
+ 
+ def executable(runtime: str) -> str | None:
+@@ -110,7 +111,7 @@ def command(runtime: str, work: Path, socket: str, token: str, model: str | None
+             config['provider'] = {'opendirector': {'npm': '@ai-sdk/openai-compatible', 'name': 'OpenDirector',
+                 'options': {'baseURL': model_url, 'apiKey': '{env:OPENDIRECTOR_MODEL_KEY}'},
+                 'models': {model: {'name': model, 'modalities': {'input': input_modalities or ['text'], 'output': ['text']}}}}}
+-            env.update(XDG_CONFIG_HOME=str(work), OPENDIRECTOR_MODEL_KEY=token)
++            env.update(bundled_environment(work), OPENDIRECTOR_MODEL_KEY=token)
+         env.update(OPENCODE_DISABLE_EXTERNAL_SKILLS='1', OPENCODE_DISABLE_CLAUDE_CODE_SKILLS='1', OPENCODE_CONFIG_CONTENT=json.dumps(config))
+         # OpenCode uses inherited PWD when resolving its local directory.
+         env['PWD'] = str(native_directory or work)
+@@ -178,6 +179,10 @@ class NativeRuntime:
+         selection = {'model': runtime_model, 'thinking': thinking}
+         if config:
+             selection.update(config=config.get('id'), modelId=config['modelId'])
++        if run.runtime == 'default':
++            # Before isolation, stored native IDs referred to a different DB.
++            # Rebuild from OpenDirector history instead of trying to migrate it.
++            selection['bundledProfile'] = str(bundled_profile())
+         session_id = run.native_session_id(selection)
+         session_directory = run.native_session_directory() if session_id else None
+         if session_id and session_directory is None:
+diff --git a/packages/core/src/opendirector/agent/skills.py b/packages/core/src/opendirector/agent/skills.py
+index b0555b3..de27ebd 100644
+--- a/packages/core/src/opendirector/agent/skills.py
++++ b/packages/core/src/opendirector/agent/skills.py
+@@ -5,6 +5,7 @@ import os
+ from pathlib import Path
+ from tempfile import TemporaryDirectory
+ 
++from opendirector.agent.bundled_profile import bundled_environment
+ from opendirector.agent.native import BUNDLED_INSTALL_ERROR, executable
+ from opendirector.agent.process import terminate
+ from opendirector.installation import builtin_skills
+@@ -18,7 +19,7 @@ async def skills(repository: Path, directory: Path) -> list[dict[str, str]]:
+     roots = [path.resolve() for path in [directory / '.opendirector/skills',
+         repository / '.opendirector/skills', builtin_skills()] if path.is_dir()]
+     with TemporaryDirectory(prefix='od-skills-') as temporary:
+-        env = {**os.environ, 'XDG_CONFIG_HOME': temporary,
++        env = {**os.environ, **bundled_environment(Path(temporary)),
+                'OPENCODE_DISABLE_EXTERNAL_SKILLS': '1', 'OPENCODE_DISABLE_CLAUDE_CODE_SKILLS': '1',
+                'OPENCODE_CONFIG_CONTENT': json.dumps({'skills': {'paths': list(map(str, roots))}})}
+         try:

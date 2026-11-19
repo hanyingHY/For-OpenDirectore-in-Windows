@@ -1,0 +1,28 @@
+--- a/tests/test_native_runtime.py
++++ b/tests/test_native_runtime.py
+@@ -641,7 +641,7 @@
+     monkeypatch.setattr(native, 'executable', lambda _: str(binary))
+     instance = AgentRuntimes(CreationProjects(LocalProjects(tmp_path)), None, ModelConfigs(tmp_path))
+     async def check():
+-        with pytest.raises(ProjectError, match='内置 Agent 依赖安装不完整') as caught:
++        with pytest.raises(ProjectError, match='可信来源的 OpenDirector Windows 安装包') as caught:
+             async for _ in instance.stream(RunContext(runtime='default', project_id=uuid4(),
+                     turn_id=uuid4(), session=str(uuid4()), directory=tmp_path,
+                     config={'modelId': 'test', 'apiKey': '', 'url': 'http://localhost/v1', 'protocol': 'openai'},
+--- a/tests/test_runtime_readiness.py
++++ b/tests/test_runtime_readiness.py
+@@ -141,11 +141,11 @@
+         response = client.get(path + '/assistant/skills')
+         assert response.status_code == 503
+         assert response.json()['code'] == 'agent_dependency_unavailable'
+-        assert 'pip install' in response.json()['detail']
++        assert 'Windows 安装包' in response.json()['detail']
+         english = client.get(path + '/assistant/skills', headers={'Accept-Language': 'en-US'})
+         assert english.status_code == 503
+-        assert 'pip install' in english.json()['detail']
+-        assert 'Bundled Agent' in english.json()['detail']
++        assert 'trusted Windows installer' in english.json()['detail']
++        assert 'bundled Agent' in english.json()['detail']
+         assert '磁盘空间' not in response.json()['detail']
+ 
+ def test_jiuwenswarm_readiness_uses_the_executable_installation_resolved(monkeypatch):

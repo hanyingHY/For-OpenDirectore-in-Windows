@@ -14,7 +14,7 @@ from urllib.error import HTTPError
 from urllib.parse import urlsplit
 from urllib.request import build_opener, HTTPRedirectHandler, Request
 
-REPO = 'hanyingHY/For-OpenDirector'
+REPO = 'hanyingHY/For-OpenDirectore-in-Windows'
 FEED = f'https://api.github.com/repos/{REPO}/releases?per_page=100'
 MANIFEST = 'windows-update.json'
 BUNDLE = MANIFEST + '.sigstore.json'
@@ -78,7 +78,7 @@ def authenticate(data, proof):
     root = files('sigstore._store') / 'https%3A%2F%2Ftuf-repo-cdn.sigstore.dev' / 'trusted_root.json'
     workflow = f'https://github.com/{REPO}/.github/workflows/windows.yml@refs/heads/'
     signer = policy.AnyOf([policy.Identity(identity=workflow + branch, issuer='https://token.actions.githubusercontent.com')
-                           for branch in ('main', 'arena/634b6979-for-opendirector', 'arena/78ad8084-for-opendirector')])
+                           for branch in ('main', 'arena/19c32ddb-for-opendirectore-in-windows')])
     Verifier(trusted_root=TrustedRoot.from_file(str(root))).verify_artifact(data, Bundle.from_json(proof), signer)
 
 

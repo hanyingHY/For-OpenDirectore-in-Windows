@@ -1,6 +1,10 @@
 # Windows 对照清单 · RFC #362
 
-核对基线：[RFC 与六项工作](https://github.com/ThinkFlowLab/OpenDirector/issues/362)；[对应的原版网页、服务与 CLI 源码](https://github.com/ThinkFlowLab/OpenDirector/tree/d05a56d712349ee7e4c61407cfc2d0258724cefa)。这是本分支的 Windows 验收记录，不代表上游已经接受或关闭这些 issue。
+> 本文主体记录 desktop.5–desktop.7 时代的核对结论；证据二进制（录像、EXE 校验和）已从本仓库 Git 移除，
+> 完整文件与当时的 Actions 记录见 [hanyingHY/For-OpenDirector](https://github.com/hanyingHY/For-OpenDirector)
+> 的对应分支与 README。desktop.9（本仓库）的验收证据以本仓库 Actions 产物为准。
+
+核对基线：[RFC 与六项工作](https://github.com/ThinkFlowLab/OpenDirector/issues/362)；[对应的原版网页、服务与 CLI 源码](https://github.com/ThinkFlowLab/OpenDirector/tree/ab3f05855251eb459b102186ff45936216580931)。这是本分支的 Windows 验收记录，不代表上游已经接受或关闭这些 issue。
 
 | 工作项 | Windows 处理方式 | 验证方法 / 不包含什么 |
 | --- | --- | --- |

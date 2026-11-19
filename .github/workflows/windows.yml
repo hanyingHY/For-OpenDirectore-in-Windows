@@ -46,7 +46,7 @@ jobs:
             delivery/timeline-export.mp4
   sign-update:
     needs: package
-    if: github.repository == 'hanyingHY/For-OpenDirector' && github.ref == 'refs/heads/main'
+    if: github.repository == 'hanyingHY/For-OpenDirectore-in-Windows' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/19c32ddb-for-opendirectore-in-windows')
     runs-on: ubuntu-latest
     permissions:
       contents: read

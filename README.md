@@ -2,41 +2,52 @@
 
 面向 Windows x64 的非官方桌面发行版。安装后从开始菜单打开 **OpenDirector**，无需命令行、Python 环境或本地开发服务器。不是网页快捷方式，也不连接某个托管的 OpenDirector 网站。
 
-**[desktop.7 Windows x64 安装包（维护者草稿）](https://github.com/hanyingHY/For-OpenDirector/releases/tag/untagged-77520365e069afb1c1a1)** · **[desktop.7 Actions 安装包（ZIP 内含 EXE）](https://github.com/hanyingHY/For-OpenDirector/actions/runs/44452250785/artifacts/14495997765)** · [desktop.7 Windows 验收记录](https://github.com/hanyingHY/For-OpenDirector/actions/runs/44452250785)
+本仓库承接 [RFC #362](https://github.com/ThinkFlowLab/OpenDirector/issues/362) 的 Windows 范围，延续
+[hanyingHY/For-OpenDirector](https://github.com/hanyingHY/For-OpenDirector) 的迭代历史（desktop.1–desktop.7 的安装包、
+录像与验收记录都在该仓库的分支与 Actions 里）。固定基线已随 desktop.9 迁到上游
+[ThinkFlowLab/OpenDirector `ab3f0585`](https://github.com/ThinkFlowLab/OpenDirector/tree/ab3f05855251eb459b102186ff45936216580931)（0.1.4，当前 main）。
 
+## desktop.9：时间线「失败卡」必须能关掉（本次修复）
 
-**[desktop.7 实机窗口录像](delivery/desktop.7-windows-workflow.mp4)** · [六个画布入口实录](delivery/desktop.7-windows-sidebar.mp4) · [应用实际导出的 H.264 MP4](delivery/desktop.7-timeline-export.mp4) · [安装包 SHA-256](delivery/SHA256SUMS.txt)。[构建、跨版覆盖安装及签名交接测试](https://github.com/hanyingHY/For-OpenDirector/actions/runs/44452250785) 已通过，录像与 EXE 从同一次构建保留。录像中的 AI 服务响应来自本地测试模型；OpenCode、项目写入及渲染是真实执行。EXE 未经 Authenticode 签名。
+空时间线点「导出视频」会留下失败卡「请先向时间线加入素材。」，而卡片只有「重试输出」——对这条错误重试永远
+同样失败，且卡片是虚拟节点：选不中、删不掉、焦点进不去，Esc 与右键都被吞掉，只能换工程或删掉来源时间线才能脱身。
+网页版（上游 main `ab3f0585`）同样中枪，这是上游 UI 缺陷，不是 Windows 适配引入的。
 
-### 上一版 desktop.6 归档
-
-**[下载 Windows EXE（仓库维护者可见的草稿）](https://github.com/hanyingHY/For-OpenDirector/releases/tag/untagged-2dd2f0a139431e481607)** · **[Actions 备用下载](https://github.com/hanyingHY/For-OpenDirector/actions/runs/44297067032/artifacts/14424746913)** · **[画布重叠复现与修复](delivery/canvas-debug.mp4)** · **[Windows 全流程实录](delivery/studio-walkthrough.mp4)** · [时间线导出的 MP4](delivery/timeline-export.mp4) · [可导入的示例画布](examples/Blue%20Hour.canvas)
-
-登录有仓库维护权限的 GitHub 账号，可从草稿中直接下载 EXE。Actions 备用下载需要登录，解压得到 `OpenDirector-0.1.4-desktop.6-x64-Setup.exe`，双击即可按当前用户安装。用 `Get-FileHash .\OpenDirector-0.1.4-desktop.6-x64-Setup.exe -Algorithm SHA256` 对照其发布草稿内的 `SHA256SUMS.txt`。安装程序**没有 Authenticode 签名**，可能触发 SmartScreen。请核对来源和 SHA-256，不要关闭系统安全防护。无管理员权限要求；安装和首次启动请预留约 2 GB 空间。
-
-**desktop.6 结果**：[源码构建与 five-lane 检查通过](https://github.com/hanyingHY/For-OpenDirector/actions/runs/44297067032)，[独立 Windows 安装/升级/导出/验收通过](https://github.com/hanyingHY/For-OpenDirector/actions/runs/44299900134)。画布录像来自升级前的 desktop.5；[图片编辑 → Agent → 渲染实录](delivery/studio-walkthrough.mp4)、[Agent 写入截图](delivery/windows-agent-en.png)和 1.5 秒 H.264 输出来自升级后的 desktop.6。逐项结果与边界见 [Windows 核对清单](WINDOWS-AUDIT.md)。
+- **空时间线不再产生失败卡**：请求在原地被拒绝，用工程已有的 toast 提示「请先向时间线加入素材。」，
+  画布上不出现任何覆盖层；判定依据是**已保存的编辑器文档**（编码器将要读的内容），不是画布节点的缓存副本。
+- **真实的编码失败有三条出路**：`编辑时间线`（直接跳回编辑器修）、`重试输出`、以及真正的关闭按钮
+  （带 `aria-label`、可键盘聚焦，悬停为红色 ×）。双语键 `timeline.output.dismiss` / `timeline.output.edit`
+  进入 i18n 目录，`check:i18n` 通过。
+- **关闭即释放一切**：中断在途渲染、丢弃已渲染但未发布的挂起结果（解除 `blockedItemId` 对其它时间线
+  导出按钮的连带阻塞）、清空覆盖层；覆盖层此前不落库，关闭后不留孤儿视频节点、无卡死的 `active`/`pending` 引用。
+- 网页版回归：`verification/timeline_output_dismiss.mjs`（六段旅程）进 canvas 车道；装机验收：
+  `verification/render.mjs` 在**真实安装版 WebView2 窗口**里复现空时间线 → 失败卡 → 关闭 → 真实渲染的完整链路，
+  专程录像 `delivery/windows-timeline-dismiss.mp4`（CI 产物）。
+- 细节见 [DESKTOP-PARITY-REVIEW.md](DESKTOP-PARITY-REVIEW.md)（含 PR #397 借鉴分析与同类产品对照）。
 
 ### 画布布局（desktop.6 新增）
 
-六个侧栏创建入口（文本、图片、视频、音频、时间线、主体）原共用画布居中锚点，连续创建的卡片会互相覆盖。desktop.6 只在自动创建路径上计算空位：已有节点按其父组换算为绝对边界，再加上实际宽高与 64 画布单位间隔，从当前锚点沿水平或垂直轴取最近的空位；没有固定列数，也没有搜索半径。明确指定的端点、鼠标拖放、替换素材和打开旧工程不会触发全图重排，已有叠放也不会被悄悄移动——需要整理时点击画布空白处，按 `Ctrl+A` 或框选卡片，再点多选工具栏的「自动排列」；`Shift+1` 查看全图，必要时点「撤销」恢复。[看旧版复现与手动恢复](delivery/canvas-debug.mp4)。
+六个侧栏创建入口（文本、图片、视频、音频、时间线、主体）原共用画布居中锚点，连续创建的卡片会互相覆盖。desktop.6 只在自动创建路径上计算空位：已有节点按其父组换算为绝对边界，再加上实际宽高与 64 画布单位间隔，从当前锚点沿水平或垂直轴取最近的空位；没有固定列数，也没有搜索半径。明确指定的端点、鼠标拖放、替换素材和打开旧工程不会触发全图重排，已有叠放也不会被悄悄移动——需要整理时点击画布空白处，按 `Ctrl+A` 或框选卡片，再点多选工具栏的「自动排列」；`Shift+1` 查看全图，必要时点「撤销」恢复。（旧版复现与手动恢复的录像见上一仓库 desktop.6 归档。）
 
 ## 桌面版与网页版是什么关系？
 
-固定基线是 [ThinkFlowLab/OpenDirector `d05a56d`](https://github.com/ThinkFlowLab/OpenDirector/tree/d05a56d712349ee7e4c61407cfc2d0258724cefa)（0.1.4）。使用其 `package-lock.json` 构建完整的 React/Vite UI，原样加载其 API、画布、时间线、字幕字体、双语消息、模型配置和 Agent skills。打包时对 Windows CLI 启动脚本、非交互 Git 初始化的标准输入和只读任务计数接入点做适配，不改画布的写入、渲染或模型业务规则。WebView2 提供 Edge 的文件选择、下载、剪贴板和 WebCodecs，不用另一套 UI 模仿原版。
+固定基线是 [ThinkFlowLab/OpenDirector `ab3f0585`](https://github.com/ThinkFlowLab/OpenDirector/tree/ab3f05855251eb459b102186ff45936216580931)（0.1.4）。使用其 `package-lock.json` 构建完整的 React/Vite UI，原样加载其 API、画布、时间线、字幕字体、双语消息、模型配置、Agent skills 和示例画布目录。打包时对 Windows CLI 启动脚本、非交互 Git 初始化的标准输入和只读任务计数接入点做适配，编译 UI 前应用四个补丁（自动创建节点空位、内置 Agent、时间线失败卡、桌面 503 契约），不改存储格式、渲染和模型业务规则。WebView2 提供 Edge 的文件选择、下载、剪贴板和 WebCodecs，不用另一套 UI 模仿原版。
 
 | 项目 | 本次交付 |
 | --- | --- |
 | 目标 | Windows 11 x64 / Windows 10 22H2 x64，.NET Framework 4.8+ 及 Evergreen WebView2；不含 Windows ARM64、x86、macOS、Linux |
 | 实测系统 | GitHub-hosted **Windows Server 2022 x64**。这是原生 Windows 构建和 GUI 测试，不是 Win10、Win11 各硬件机型的认证 |
-| 打包 | 每用户 NSIS 安装 / 卸载；开始菜单、桌面快捷方式、App Paths；桌面版 `0.1.4-desktop.7`，编译 UI 前额外应用 `patches/canvas-placement.patch`（仅影响自动创建的节点位置，不改动存储格式、渲染和模型业务规则） |
+| 打包 | 每用户 NSIS 安装 / 卸载；开始菜单、桌面快捷方式、App Paths；桌面版 `0.1.4-desktop.9`，编译 UI 前额外应用 `patches/` 四个补丁（仅影响列名的行为，不改动存储格式、渲染和模型业务规则） |
 | 随应用安装 | CPython 3.12.16、上游 Python 依赖、OpenCode 1.19.5 x64 baseline、MinGit 2.56.1、ripgrep 15.1.0、FFmpeg/ffprobe 9.0.2（含 libx264）、编译后的 Web UI |
 | 系统组件 | WebView2 SDK 1.0.2903.40；实际浏览器由系统 Evergreen Runtime 提供并更新。若被移除，请从[微软](https://developer.microsoft.com/microsoft-edge/webview2/)安装 x64 运行时。未捆绑完整浏览器或模型权重 |
 
 ### 第一次使用
 
 1. 安装后打开应用；可以先不配模型，创建项目、上传本地素材、编辑、导入和导出。点上方「中文 / EN」切换语言。
-2. 可用「导入画布」打开 `examples/Blue Hour.canvas`。它是由原版界面实际导出的含图像和视频提示词的工程，不需要 API 密钥。
+2. 画布工具栏自带上游的「示例画布」对话框：从目录里选一个示例下载导入（带进度、可取消、可重试），不需要 API 密钥。本仓库 `examples/Blue Hour.canvas` 是上一版交付用过的离线示例，仍可从检出仓库的机器上用「导入画布」打开。
 3. 用 AI 时，在原版模型设置中配置自己的服务地址、模型 ID 和认证。第三方服务、价格、账号权限、可选的外部 Agent CLI 与网页版本一样，不随安装包附赠。
 4. **导出时保持应用运行**。MP4 在渲染器内编码，需要 WebView2 和系统的 H.264 编码能力。不要在导出、生成或 Agent 正在工作时退出。主窗口 × 隐藏到托盘；双击托盘或重新从开始菜单启动会唤回原窗口。选择托盘「退出」或按 **Alt+空格 → 退出 OpenDirector** 才会检查运行中的任务、显示确认并停止本地进程树；远端提供商已经接受的任务未必随之取消。
+5. 时间线导出失败时（包括空时间线、画面尺寸超过编码器上限等），失败卡右上角有「编辑时间线」「重试输出」和红色「关闭」三个出路；空时间线则直接在原地用 toast 提示，不会出现失败卡。
 
 ### 文件、CLI 和升级
 
@@ -71,12 +82,12 @@ GUI 和 CLI 使用同一个项目 ID、会话租约、文件锁及版本规则�
 - 异常退出后，上游编辑租约最多保留约 **60 秒**。等待后重新连接，不要删除 SQLite 索引或锁文件。
 - Agent 不工作时，先检查模型配置、网络和诊断；不要在错误报告中包含密钥、完整项目目录或会话凭据。
 
-## desktop.7：Windows 回归修复
+## desktop.7：Windows 回归修复（历史，沿自上一仓库）
 
 - 内置 OpenCode 的数据、缓存和状态放在 `%LOCALAPPDATA%\OpenDirector\Desktop\agent-runtime\opencode-v1`，不读取或迁移用户的独立 OpenCode 数据库。旧的原生会话 ID 不会跨存储目录复用；继续对话时从 OpenDirector 已保存的历史恢复。内置依赖损坏时请用可信安装包覆盖安装，不要运行 `pip install`。
 - 应用运行时直接执行 `Uninstall.exe /S` 返回 **2**，保留安装与项目。请从托盘完全退出再卸载；正常完成返回 **0**，项目与凭据仍保留。安装器、卸载器、桌面宿主与 CLI 都含品牌图标和版本资源；Windows 设置显示发布者、图标与安装大小。
 - 自动更新的成功检查间隔跨重启保留 **12 小时**。手动检查可绕过常规间隔，但遵守服务器的限流退避；网络故障不影响编辑。桌面日志按 UTF-8 收集 Python stdout/stderr。
-- desktop.6 不信任当前候选分支的更新签名，所以 .6 → .7 用可信 EXE 手动覆盖安装。公开稳定频道应从已有客户端信任的 `main` 构建；不会为候选包绕过旧版签名验证。
+- 更新信任根现指向本仓库 `hanyingHY/For-OpenDirectore-in-Windows` 的 `windows.yml` 在 `main` 或当前桌面工作分支的签名；desktop.6/7 客户端只信任上一仓库的签名，所以从旧版升级用可信 EXE 手动覆盖安装。
 
 ## 复现 Windows 构建
 
@@ -110,11 +121,9 @@ pwsh -NoProfile -File scripts/agent-check.ps1
 ## 验证
 
 - `python -m unittest discover -s tests -v`：桌面私有传输、Host/Origin 检查和 ASGI 生命周期。
-- [Windows 构建记录](https://github.com/hanyingHY/For-OpenDirector/actions/runs/44297067032)：编译 PE、运行打包的 OpenCode/媒体工具，安装后通过 CDP 操作**已经打开的原生 WebView2 窗口**，不是另外启动 Chrome。CDP 只由测试父进程启用。
-- [候选安装包独立验收](https://github.com/hanyingHY/For-OpenDirector/actions/runs/44299900134)：在另一台 Windows runner 下载相同 EXE，隔离开发工具 PATH，使用带空格及中文的工作目录，导入图片、编辑提示词、导出 `.canvas`、从 desktop.5 覆盖升级到 desktop.6、英文重开、从聊天框驱动原生 Agent 写入同一项目并验证凭据保留、导入时间线、渲染 MP4 并用 ffprobe 检查编码、尺寸和时长。
-- `verification/previous-update.ps1` 使用**已安装的上一版更新器和它自带的信任根**，验证草稿清单、启动新版安装器、等待旧宿主退出，再从自动重启的应用读取同一工程和密钥文件。它只替换发布资产的网络传输，不是公开推送。
+- Windows 构建记录：本仓库 Actions 的 `Windows x64 desktop` 工作流——编译 PE、运行打包的 OpenCode/媒体工具，安装后通过 CDP 操作**已经打开的原生 WebView2 窗口**，不是另外启动 Chrome。CDP 只由测试父进程启用。
+- 装机验收：真实安装/创建工程/导入素材/导出 `.canvas`/英文重开、Agent 写入同一项目、**空时间线导出被原地拒绝、失败卡三键可关、真实渲染 MP4 并用 ffprobe 校验编码、尺寸、时长**；证据（截图与 `windows-timeline-dismiss.mp4` 等录像）随工作流产物上传。
 - `scripts/smoke.ps1` **仅在空白测试账号 / VM 中运行**：会安装、终止和卸载应用。`scripts/agent-check.ps1` 运行上游包含真实 OpenCode 子进程的回归，用确定性的本地模型响应，既不伪造 Agent 程序也不发送付费请求。
-- [Five-lane CI](https://github.com/hanyingHY/For-OpenDirector/actions/runs/44297885250)：前端、后端、助手、语音和画布几何回归；浏览器通过率不等同于 Windows 窗口验收，两者结论须分别看。
-- `delivery/candidate.json` 指向当前分支已执行跨版本安装验收的构建。交付工作流检查整条 Windows 流水线状态与产物摘要，回存小型证据，并把原始 EXE 附加到该提交对应的维护者 **draft release**（须事先用 `gh release create <tag> --draft --target <完整构建提交>` 创建，标签写入 `draftTag`），不会向上游推送或公开发布。
+- Five-lane CI（前端、后端、助手、语音和画布几何回归）由 `canvas.yml`/`checks.yml` 承担；浏览器通过率不等同于 Windows 窗口验收，两者结论须分别看。
 
 本仓库只处理 [RFC #362](https://github.com/ThinkFlowLab/OpenDirector/issues/362) 的 Windows 范围。生产 Authenticode 签名、真实付费模型与各 Windows 客户端 / GPU 组合仍需单独验收。

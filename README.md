@@ -2,6 +2,19 @@
 
 面向 Windows x64 的非官方桌面发行版。安装后从开始菜单打开 **OpenDirector**，无需命令行、Python 环境或本地开发服务器。不是网页快捷方式，也不连接某个托管的 OpenDirector 网站。
 
+**desktop.10（本分支）**：交付基线推进到上游 `ab3f0585`（当前 `main` 头）。构建、原生 Agent 车道、装机冒烟与渲染验收由 [Windows x64 desktop 工作流](../../actions/workflows/windows.yml) 在 `windows-2022` runner 上执行；安装包在 run 页面的 `Windows-installer-x64` 构件里，原生窗口截图与录像在 `Windows-native-evidence` 里。本轮修复的时间线「失败卡」问题（用户报告：卡片关不掉）见 [DESKTOP-PARITY-REVIEW.md §0](DESKTOP-PARITY-REVIEW.md)——含网页版 A/B 录像与逐条判据：
+
+| 证据（本分支实录） | 文件 |
+| --- | --- |
+| 原项目网页版（未打补丁）：失败卡只有「重试输出」，Escape / 点空白 / 右键全部无效，关不掉 | [delivery/preview/baseline-repro.mp4](delivery/preview/baseline-repro.mp4) |
+| 适配后：空时间线以 toast 回答、不留卡片；真失败卡片给 编辑时间线 / 重试输出 / 关闭卡片（✕），焦点落出口、Escape 可关；关闭后无孤儿输出、引用不卡死 | [delivery/preview/patched-verify.mp4](delivery/preview/patched-verify.mp4) |
+| 关键帧截图（失败卡三出口、Escape 关闭、关闭后画布状态等） | [delivery/preview/](delivery/preview/) |
+| 校验值（逐文件列出，不用通配） | [delivery/SHA256SUMS.txt](delivery/SHA256SUMS.txt) |
+
+> 录像是运行中应用的真实截屏帧（CDP screencast → libx264），在沙箱 Linux 容器里对锁定基线的原样网页运行录制；装机场景（真实 WebView2 窗口）由 `scripts/smoke.ps1` + `verification/render.mjs` 在 Windows runner 上复验同一组选择器与判据。
+
+### 上一版 desktop.6 / desktop.7 归档（姐妹仓库 hanyingHY/For-OpenDirector）
+
 **[desktop.7 Windows x64 安装包（维护者草稿）](https://github.com/hanyingHY/For-OpenDirector/releases/tag/untagged-77520365e069afb1c1a1)** · **[desktop.7 Actions 安装包（ZIP 内含 EXE）](https://github.com/hanyingHY/For-OpenDirector/actions/runs/44452250785/artifacts/14495997765)** · [desktop.7 Windows 验收记录](https://github.com/hanyingHY/For-OpenDirector/actions/runs/44452250785)
 
 
@@ -27,7 +40,7 @@
 | --- | --- |
 | 目标 | Windows 11 x64 / Windows 10 22H2 x64，.NET Framework 4.8+ 及 Evergreen WebView2；不含 Windows ARM64、x86、macOS、Linux |
 | 实测系统 | GitHub-hosted **Windows Server 2022 x64**。这是原生 Windows 构建和 GUI 测试，不是 Win10、Win11 各硬件机型的认证 |
-| 打包 | 每用户 NSIS 安装 / 卸载；开始菜单、桌面快捷方式、App Paths；桌面版 `0.1.4-desktop.7`，编译 UI 前额外应用 `patches/canvas-placement.patch`（仅影响自动创建的节点位置，不改动存储格式、渲染和模型业务规则） |
+| 打包 | 每用户 NSIS 安装 / 卸载；开始菜单、桌面快捷方式、App Paths；桌面版 `0.1.4-desktop.10`，编译 UI 前额外应用 `patches/canvas-placement.patch` 与 `patches/timeline-output-dismiss.patch`（仅影响自动创建的节点位置与失败卡的出口，不改动存储格式、渲染和模型业务规则） |
 | 随应用安装 | CPython 3.12.16、上游 Python 依赖、OpenCode 1.19.5 x64 baseline、MinGit 2.56.1、ripgrep 15.1.0、FFmpeg/ffprobe 9.0.2（含 libx264）、编译后的 Web UI |
 | 系统组件 | WebView2 SDK 1.0.2903.40；实际浏览器由系统 Evergreen Runtime 提供并更新。若被移除，请从[微软](https://developer.microsoft.com/microsoft-edge/webview2/)安装 x64 运行时。未捆绑完整浏览器或模型权重 |
 

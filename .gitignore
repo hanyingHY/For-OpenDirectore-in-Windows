@@ -2,3 +2,5 @@
 delivery/*.exe
 __pycache__/
 node_modules/
+/source/
+*.pyc

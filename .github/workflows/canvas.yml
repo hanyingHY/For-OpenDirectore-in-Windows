@@ -1,8 +1,13 @@
 name: Patched canvas and service regressions
 on:
   workflow_dispatch:
+    inputs:
+      record_reel:
+        description: 'Also record the patched journey as an H.264 MP4 (evidence artifact)'
+        type: boolean
+        default: true
   push:
-    paths: ['patches/**', 'scripts/package.py', 'verification/placement.test.ts', 'verification/timeline_output_dismiss.mjs', 'verification/frame-connections.patch', 'verification/desktop-error-contract.patch', '.github/workflows/canvas.yml']
+    paths: ['patches/**', 'scripts/package.py', 'verification/placement.test.ts', 'verification/timeline_output_dismiss.mjs', 'verification/timeline_output_reel.mjs', 'verification/reel.mjs', 'verification/browser-engine.mjs', 'verification/frame-connections.patch', 'verification/desktop-error-contract.patch', '.github/workflows/canvas.yml']
 permissions: {contents: read}
 jobs:
   verify:
@@ -76,3 +81,53 @@ jobs:
             git apply ../verification/frame-connections.patch
             node tests/browser/first_last_frame_connections.mjs
           fi
+
+  # Recorded evidence is not a gate: it needs a full Chromium (proprietary codecs for
+  # MediaRecorder), which `--only-shell` does not ship. It therefore runs only when a
+  # human asks for it, and a missing codec fails the job loudly instead of quietly
+  # changing what the acceptance lanes assert. Same pinned source, same patches.
+  reel:
+    if: github.event_name == 'workflow_dispatch' && inputs.record_reel
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    defaults:
+      run: {working-directory: source}
+    steps:
+      - uses: actions/checkout@v6
+        with: {persist-credentials: false}
+      - id: upstream
+        working-directory: .
+        run: python -c "import runpy; print('sha=' + runpy.run_path('scripts/package.py')['SHA'])" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v6
+        with:
+          repository: ThinkFlowLab/OpenDirector
+          ref: ${{ steps.upstream.outputs.sha }}
+          path: source
+          persist-credentials: false
+      - run: git apply ../patches/canvas-placement.patch ../patches/bundled-agent.patch ../patches/timeline-output-dismiss.patch
+      - uses: actions/setup-node@v6
+        with: {node-version-file: source/.nvmrc}
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.12'}
+      - run: |
+          # ffprobe backs the media path the journey publishes through; the shipped
+          # installer brings its own FFmpeg, this is the test machine's probe only.
+          sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+          python -m pip install -r requirements.txt
+      - run: |
+          npm install --prefix "$RUNNER_TEMP/browser" --no-save playwright-core@1.58.2
+          node "$RUNNER_TEMP/browser/node_modules/playwright-core/cli.js" install chromium
+          export PLAYWRIGHT_MODULE="$RUNNER_TEMP/browser/node_modules/playwright-core/index.mjs"
+          export CREATION_WEB_URL=http://127.0.0.1:5179 CREATION_API_URL=http://127.0.0.1:8019
+          export OPENDIRECTOR_API_URL="$CREATION_API_URL"
+          python tests/browser/creation_server.py --port 8019 >"$RUNNER_TEMP/api.log" 2>&1 & api=$!
+          npm run dev -- --port 5179 --strictPort >"$RUNNER_TEMP/web.log" 2>&1 & web=$!
+          trap 'kill "$api" "$web" || true' EXIT
+          curl --retry 40 --retry-all-errors --retry-delay 1 -fsS "$CREATION_WEB_URL/" -o /dev/null
+          curl --retry 40 --retry-all-errors --retry-delay 1 -fsS -H 'X-OpenDirector-Request: 1' "$CREATION_API_URL/api/health" -o /dev/null
+          OD_REEL=after OD_REEL_DIR=.work/reel-after OD_REEL_OUT=.work node ../verification/timeline_output_reel.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: timeline-output-reel
+          path: source/.work/timeline-output-after.*
+          if-no-files-found: error

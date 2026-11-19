@@ -15,7 +15,8 @@
  *
  * Patched behaviour checked here:
  *  - an empty timeline answers with the existing toast and never opens a card;
- *  - a genuine encode failure offers Edit timeline / Retry output / Close card;
+ *  - a genuine encode failure offers Edit timeline / Retry output / Close card,
+ *    takes keyboard focus on the way out, and treats Escape as「close the card」;
  *  - closing releases the overlay and any held render, leaves no orphan video item,
  *    and a later attempt still works (no stuck `active`/`pending` refs).
  *
@@ -184,14 +185,34 @@ try {
     "a failed card needs fix-source, retry and leave, got: " + shot.actions.join("|"));
   // The leave control is reachable by keyboard and named for assistive tech.
   assert.equal(await failedCard.locator(".cw-timeline-pending-close").getAttribute("aria-label"), "Close card");
+  // A failed card is a virtual node, so keyboard access has to come to the user:
+  // focus lands on 关闭卡片 / Close card, and Escape is read as「leave this card」
+  // rather than as the canvas's「deselect」.
+  assert.match(shot.alert, /cannot encode H\.264 at this size/);
+  const focused = await page.evaluate(() => {
+    const active = document.activeElement;
+    return {
+      className: active?.className || "",
+      label: active?.getAttribute?.("aria-label") || "",
+      insideCard: !!active?.closest(".cw-timeline-pending"),
+    };
+  });
+  assert.equal(focused.insideCard, true, "a failed card took no keyboard focus: " + JSON.stringify(focused));
+  assert.match(focused.className, /cw-timeline-pending-close/, "focus should land on the way out: " + JSON.stringify(focused));
+  await page.keyboard.press("Escape");
+  await failedCard.waitFor({ state: "detached" });
+  assert.equal((await cardState(page)).card, false, "Escape did not release the failed card");
 
-  // (3) "Edit timeline" is the short path to the fix, not a dead end.
+  // (3) "Edit timeline" is the short path to the fix, not a dead end. The card
+  // has to fail once more first: the keyboard path above took it away.
+  await failOnce();
   await failedCard.getByRole("button", { name: "Edit timeline", exact: true }).click();
   await page.locator(".cw-timeline-dialog").waitFor();
   await page.locator(".cw-timeline-dialog").getByRole("button", { name: "Close editor", exact: true }).click();
   await page.locator(".cw-timeline-dialog").waitFor({ state: "detached" });
 
-  // (4) Closing releases the overlay and everything it held.
+  // (4) Closing by pointer releases the overlay and everything it held. The
+  // Escape above went through the keyboard path; this one goes through the ✕.
   const closed = await failOnce();
   assert.equal(closed.card, true, "the second attempt never reached its card");
   await failedCard.getByRole("button", { name: "Close card", exact: true }).click();

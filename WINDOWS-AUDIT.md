@@ -1,6 +1,6 @@
 # Windows 对照清单 · RFC #362
 
-核对基线：[RFC 与六项工作](https://github.com/ThinkFlowLab/OpenDirector/issues/362)；[对应的原版网页、服务与 CLI 源码](https://github.com/ThinkFlowLab/OpenDirector/tree/d05a56d712349ee7e4c61407cfc2d0258724cefa)。这是本分支的 Windows 验收记录，不代表上游已经接受或关闭这些 issue。
+核对基线：[RFC 与六项工作](https://github.com/ThinkFlowLab/OpenDirector/issues/362)；[对应的原版网页、服务与 CLI 源码](https://github.com/ThinkFlowLab/OpenDirector/tree/ab3f05855251eb459b102186ff45936216580931)（`ab3f0585`，由 `scripts/package.py` 的 `SHA` 锁定；desktop.6–.8 用的是 `d05a56d`）。这是本分支的 Windows 验收记录，不代表上游已经接受或关闭这些 issue。
 
 | 工作项 | Windows 处理方式 | 验证方法 / 不包含什么 |
 | --- | --- | --- |
@@ -46,3 +46,28 @@ desktop.6 新增：画布自动创建节点会避让已占位置（64 单位间�
 | P6–P7 | README 给出 `pwsh`、固定 Playwright 版本和验收命令；CI 归档摘要与源代码重建产物分别校验。 |
 
 [最新窗口录像](delivery/desktop.7-windows-workflow.mp4) 与 [导出文件](delivery/desktop.7-timeline-export.mp4) 对应 [归档 EXE 校验和](delivery/SHA256SUMS.txt)。未覆盖所有 Win11 中文客户端的硬件/GPU 组合、真实第三方账号及上游每一个可选集成。
+
+## desktop.9：时间线失败卡的出口（交互层，本轮）
+
+本轮改的是 **同一份 React bundle 上的一处交互死角**，因此它的验收口径与装机不同：证据来自把锁定基线在沙箱里 **原样跑起来**（Vite + 上游隔离夹具 `tests/browser/creation_server.py`，真实 Chromium 窗口），打补丁前后各跑一次同一条旅程。
+
+| 判据 | 修复前（`ab3f0585`，未打补丁） | 修复后（本分支 `patches/timeline-output-dismiss.patch`） |
+| --- | --- | --- |
+| 空时间线点「输出视频」 | 落下失败卡「请先向时间线加入素材。」，只有一个「重试输出」 | 用工程自己的 toast 回答同一句话，不产生覆盖层、不写工程（后端 `canvasItems` 里 video 数为 0） |
+| 能否离开失败卡 | `Escape`、点画布空白、双击卡片、右键卡片、`Delete`、点重试、再点重试 —— **7/7 无效**，错误文案一字不变 | `编辑时间线 / 重试输出 / 关闭卡片` 三个出口都在；焦点自动落在 ✕；`Esc` 生效；关闭后覆盖层与 `pending`（连带 `blockedItemId` 对他人的阻塞）一起释放 |
+| 关闭是否留痕 | 无法关闭 | 关闭后节点数回到 1，无孤儿 video；同一时间线随后仍能真实渲染并下载 H.264 MP4 |
+| 中文界面 | 同样卡死 | 同一张卡三个控件都在（`编辑时间线 / 重试输出 / 关闭卡片`）；`delivery/od-timeline-output-after.mp4` 第 7 步 |
+| 上游回归 | — | `npm test` 931 通过、`check:i18n` 3238 keys 0 problems、`tsc --noEmit`、`npm run build` 全绿；`npm run test:browser` 43 条旅程全通过（含 `timeline node output` 的真 MP4 发布与多版本校验） |
+
+不包含什么：这不是装机验收。真实安装包仍要在 Windows runner 上按下面的「最短复验路线」跑；本轮没有构建 EXE，也没有把 `scripts/smoke.ps1` 的结果算进这里。`Host.cs` 退出确认的计数选择器 `'.cw-render-status progress,.cw-timeline-pending:not(:has(.cw-timeline-pending-error))'`：失败卡仍带 `.cw-timeline-pending-error`（不计入「正在导出」），且现在用户可以自己关掉它，所以「状态未知」的弹窗只会更少。**已知边界**：空时间线守卫把第一次 `setState` 移到保存往返之后，因此「点击输出 → 卡片出现」这段预检窗口在 DOM 上无痕，恰在此间退出不会报「导出 1」；此时本地编码尚未开始、文档写入仍是带版本号的保存命令，不会丢用户内容。彻底覆盖需要预检期渲染一个 DOM 标记，而那标记对合法拒绝也会闪一下——正是本补丁要消灭的形态，故不做，只记录。
+
+### 沙箱验收的可复现口径（重要）
+
+- 录像与验收用 **同一个** Chromium 与同一份 `package-lock.json`；`verification/reel.mjs` 只用 CDP 截流 + 浏览器 `MediaRecorder('video/mp4;codecs=avc1')`，不需要 ffmpeg，因此换一台机器也能重算。
+- 该容器本来不带媒体工具：为了跑通上游 `timeline node output`（会用 `ffprobe` 校验真 MP4）临时装了 `@ffprobe-installer/linux-x64` 5.2.0 与 `@ffmpeg-installer/linux-x64` 4.1.0。**它们只是测试机的媒体探针，不是安装包内容**；发行版按 `scripts/package.py` 带 FFmpeg/ffprobe 9.0.2（含 libx264）。缺探针时上游旅程会以「需要 FFmpeg」失败（409），那是测试机环境，不是应用缺陷；它顺带验证了失败卡在 **服务侧失败** 下也有出口——两种分支的判据都记在 [DESKTOP-PARITY-REVIEW.md](DESKTOP-PARITY-REVIEW.md) §0。
+- **判读规则**：同一常驻夹具上连跑两轮浏览器车道后，`locale` / `provider settings` 一类会出现 `409 operation_rejected`（编辑租约与修订号竞争，不是功能回归）。换一个新的 `--root`（或重启夹具）单独重跑即过。本轮第一次 41/43、第二次 41/43、单独重跑两条 → 43/43；结论按「单独重跑通过」记，但这条判读规则必须随交付一起说明，不能只报绿。
+- H.264 编码能力判定：`VideoEncoder.isConfigSupported('avc1.42001F')` 在该 Chromium 为 true，且录像本身能被 `Video` 元素解码回放（`delivery/SHA256SUMS.txt` 对应三段录像）。
+
+### 与上游 PR #397 的对照（结论：思路可借、壳不换）
+
+见 [DESKTOP-PARITY-REVIEW.md](DESKTOP-PARITY-REVIEW.md) §5。要点：#397 用 Electron，本仓库用 WebView2，二者对 RFC 的取舍不同；值得借的是它把「正在导出」由渲染进程 **显式上报**（`ipcMain.on('desktop:exporting')`）而不是像我们这样反查 DOM 类名，以及 `docs/architecture/desktop.md` 那份宿主生命周期文档。冒烟/构建同 job、产物与录像同构建的做法已由 `verification/reel.mjs` 在 Linux 侧对齐。

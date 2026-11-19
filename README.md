@@ -21,7 +21,7 @@
 
 ### 时间线输出失败卡片可关闭（本次改进）
 
-时间线为空时点「输出视频」原会弹出“生成失败”卡片（提示“请先向时间线加入素材”）且**无法关闭**。现在：空时间线在提交处只弹提示、不挂卡片；渲染失败的卡片提供「编辑时间线」「重试输出」「关闭卡片」三个出口，关闭即释放全部任务引用。[修复前复现录像](delivery/web-bug-repro-unclosable-card.mp4) · **[修复后全量功能模拟录像](delivery/web-full-simulation.mp4)** · [设计说明与模拟证据](verification/README.md)。模拟由 Playwright 驱动真实运行的原版 UI 完成（建项目 → 时间线 → 空时间线拒绝 → 编辑器导入 → 真实渲染发布 → 可关闭失败卡片 → 导出画布 → 中英切换），另由 Windows CI 在原生 WebView2 窗口执行安装后全量验收。
+时间线为空时点「输出视频」原会弹出“生成失败”卡片（提示“请先向时间线加入素材”）且**无法关闭**。现在：空时间线在提交处只弹提示、不挂卡片；渲染失败的卡片提供「编辑时间线」「重试输出」「关闭卡片」三个出口，关闭即释放全部任务引用。[修复前复现录像](delivery/web-bug-repro-unclosable-card.mp4) · **[修复后全量功能模拟录像](delivery/web-full-simulation.mp4)** · [设计说明与模拟证据](verification/README.md)。模拟由 Playwright 驱动真实运行的原版 UI 完成（建项目 → 时间线 → 空时间线拒绝 → 编辑器导入 → 真实渲染发布 → 可关闭失败卡片 → 导出画布 → 中英切换）；[Windows 真机验收（安装后原生 WebView2 全量）](https://github.com/hanyingHY/For-OpenDirectore-in-Windows/actions/runs/44526330763) 已通过，`Windows-native-evidence` 工件内含原生窗口录像与安装版渲染导出的 MP4。
 
 ## 桌面版与网页版是什么关系？
 

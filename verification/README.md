@@ -56,4 +56,9 @@
 
 ## 6. Windows 真机验证
 
-推送本分支触发 [windows.yml](../.github/workflows/windows.yml)：在 GitHub-hosted Windows Server 2022 x64 上打包 NSIS 安装包、安装后通过 CDP 驱动**已打开的原生 WebView2 窗口**执行 `smoke.ps1` 全套（建项目、导入图片、编辑提示词、导出画布、覆盖升级、侧栏布局、图片编辑器、Agent 聊天、渲染 MP4 并用 ffprobe 校验），并上传 `delivery/windows-*.mp4` 原生窗口录像与 `delivery/timeline-export.mp4` 渲染产物作为真机证据。
+[windows.yml](../.github/workflows/windows.yml) 在本分支提交后已在 GitHub-hosted Windows Server 2022 x64 实跑：**[Windows x64 desktop · 运行 44526330763](https://github.com/hanyingHY/For-OpenDirectore-in-Windows/actions/runs/44526330763)** 全部步骤通过——装配打补丁 UI 与 Windows 运行时、原生 Agent 项目写入（确定性模型）、编译 NSIS 安装包、**安装后通过 CDP 驱动已打开的原生 WebView2 窗口执行全量验收**（建项目、导入图片、编辑提示词、导出画布、侧栏布局、图片编辑器、Agent 聊天、渲染 MP4 并用 ffprobe 校验）。同批回归：[Desktop regression checks](https://github.com/hanyingHY/For-OpenDirectore-in-Windows/actions/runs/44526330906)、[Patched canvas and service regressions](https://github.com/hanyingHY/For-OpenDirectore-in-Windows/actions/runs/44526330669)。
+
+真机产物（Actions 页面可下载）：
+
+- `Windows-installer-x64`（约 195 MB）：`OpenDirector-0.1.4-desktop.9-x64-Setup.exe` 安装包。
+- `Windows-native-evidence`（约 4.8 MB）：原生 WebView2 窗口操作录像（`windows-*.mp4`）与安装版应用实际渲染导出的 `timeline-export.mp4`。

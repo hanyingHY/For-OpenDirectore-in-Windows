@@ -47,7 +47,7 @@ desktop.6 新增：画布自动创建节点会避让已占位置（64 单位间�
 
 desktop.7 的窗口录像与导出文件同样只在 CI 工件里（`delivery/desktop.7-*.mp4` 这些路径在本分支不存在，是继承来的死链，已作废）。
 
-`delivery/SHA256SUMS.txt` **现在只覆盖本轮三段录像**（见下表），清单就是 `delivery/SHA256SUMS.txt` 本身；不要把它当成历史 EXE 的指纹来源，EXE 的校验和以对应 run 的工件与发布说明为准。未覆盖所有 Win11 中文客户端的硬件/GPU 组合、真实第三方账号及上游每一个可选集成。
+`delivery/SHA256SUMS.txt` **现在只覆盖本轮的三段录像与两张证据帧**（打包资源如 `icon.png` 不在内）（见下表），清单就是 `delivery/SHA256SUMS.txt` 本身；不要把它当成历史 EXE 的指纹来源，EXE 的校验和以对应 run 的工件与发布说明为准。未覆盖所有 Win11 中文客户端的硬件/GPU 组合、真实第三方账号及上游每一个可选集成。
 
 ## desktop.9：时间线失败卡的出口（交互层，本轮）
 
@@ -79,7 +79,7 @@ desktop.7 的窗口录像与导出文件同样只在 CI 工件里（`delivery/de
 - 录像与验收用 **同一个** Chromium 与同一份 `package-lock.json`；`verification/reel.mjs` 只用 CDP 截流 + 浏览器 `MediaRecorder('video/mp4;codecs=avc1')`，不需要 ffmpeg，因此换一台机器也能重算。
 - 该容器本来不带媒体工具：为了跑通上游 `timeline node output`（会用 `ffprobe` 校验真 MP4）临时装了 `@ffprobe-installer/linux-x64` 5.2.0 与 `@ffmpeg-installer/linux-x64` 4.1.0。**它们只是测试机的媒体探针，不是安装包内容**；发行版按 `scripts/package.py` 带 FFmpeg/ffprobe 9.0.2（含 libx264）。缺探针时上游旅程会以「需要 FFmpeg」失败（409），那是测试机环境，不是应用缺陷；它顺带验证了失败卡在 **服务侧失败** 下也有出口——两种分支的判据都记在 [DESKTOP-PARITY-REVIEW.md](DESKTOP-PARITY-REVIEW.md) §0。
 - **判读规则**：同一常驻夹具上连跑两轮浏览器车道后，`locale` / `provider settings` 一类会出现 `409 operation_rejected`（编辑租约与修订号竞争，不是功能回归）。换一个新的 `--root`（或重启夹具）单独重跑即过。本轮第一次 41/43、第二次 41/43、单独重跑两条 → 43/43；结论按「单独重跑通过」记，但这条判读规则必须随交付一起说明，不能只报绿。
-- H.264 编码能力判定：`VideoEncoder.isConfigSupported('avc1.42001F')` 在该 Chromium 为 true，且录像本身能被 `Video` 元素解码回放（`delivery/SHA256SUMS.txt` 对应三段录像）。
+- H.264 编码能力判定：`VideoEncoder.isConfigSupported('avc1.42001F')` 在该 Chromium 为 true，且录像本身能被 `Video` 元素解码回放（`delivery/SHA256SUMS.txt` 对应三段录像与两张证据帧）。
 
 ### 与上游 PR #397 的对照（结论：思路可借、壳不换）
 

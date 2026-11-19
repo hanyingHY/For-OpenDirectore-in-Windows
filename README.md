@@ -24,7 +24,7 @@
 - 一个待查的观察：安装包比 desktop.7 的 138,799,603 B 大约 40%，而上游两个基线之间被跟踪内容只涨了 1 MB
   （60.3 → 61.3 MB），所以差额不在上游素材里，应在运行时装配那一步。体积审计进了下面的计划。
 
-上一版（desktop.6 / desktop.7）的装机证据没有复制进本分支：安装包、`SHA256SUMS.txt`、实机窗口录像与截图保存在姊妹仓库 [hanyingHY/For-OpenDirector](https://github.com/hanyingHY/For-OpenDirector) 的发布草稿与 Actions 产物里（desktop.7 构建与验收：[安装包](https://github.com/hanyingHY/For-OpenDirector/actions/runs/44452250785/artifacts/14495997765) · [验收记录](https://github.com/hanyingHY/For-OpenDirector/actions/runs/44452250785)；desktop.6：[构建](https://github.com/hanyingHY/For-OpenDirector/actions/runs/44297067032) · [独立装机验收](https://github.com/hanyingHY/For-OpenDirector/actions/runs/44299900134)）。本仓库的 `delivery/` 只保留本轮生成的三个录像与页面入口，大二进制不进 Git。
+上一版（desktop.6 / desktop.7）的装机证据没有复制进本分支：安装包、`SHA256SUMS.txt`、实机窗口录像与截图保存在姊妹仓库 [hanyingHY/For-OpenDirector](https://github.com/hanyingHY/For-OpenDirector) 的发布草稿与 Actions 产物里（desktop.7 构建与验收：[安装包](https://github.com/hanyingHY/For-OpenDirector/actions/runs/44452250785/artifacts/14495997765) · [验收记录](https://github.com/hanyingHY/For-OpenDirector/actions/runs/44452250785)；desktop.6：[构建](https://github.com/hanyingHY/For-OpenDirector/actions/runs/44297067032) · [独立装机验收](https://github.com/hanyingHY/For-OpenDirector/actions/runs/44299900134)）。本仓库的 `delivery/` 只保留本轮生成的三个录像、两张证据帧与页面入口，大二进制不进 Git。
 
 desktop.6 还带来一项画布布局修复：六个侧栏创建入口（文本、图片、视频、音频、时间线、主体）原共用画布居中锚点，连续创建的卡片会互相覆盖；现在只在自动创建路径上计算空位（按父组换算绝对边界 + 实际宽高 + 64 画布单位间隔，沿水平或垂直轴取最近空位），明确指定端点、拖放、替换素材和打开旧工程都不触发全图重排。需要整理时点画布空白处 → `Ctrl+A` → 多选工具栏「自动排列」，`Shift+1` 看全图，`Ctrl+Z` 撤销。
 
@@ -97,7 +97,7 @@ python scripts/package.py
 Get-FileHash delivery\*-Setup.exe -Algorithm SHA256
 ```
 
-产物在 `delivery/`。大二进制不进 Git。本分支的 `delivery/SHA256SUMS.txt` **只覆盖随分支保留的三个验收录像**；安装包的校验和由 CI 写进发布草稿，不是本地可复现构建承诺。NSIS 版本、文件时间戳、构建工具链等都会改变产物字节；本地请为自己的 EXE 计算并另存校验和。
+产物在 `delivery/`。大二进制不进 Git。本分支的 `delivery/SHA256SUMS.txt` **只覆盖随分支保留的三个验收录像与两张证据帧**（不含 `icon.png` 这类打包资源）；安装包的校验和由 CI 写进发布草稿，不是本地可复现构建承诺。NSIS 版本、文件时间戳、构建工具链等都会改变产物字节；本地请为自己的 EXE 计算并另存校验和。
 
 **运行本地验收**：使用交互式的干净 Windows VM，安装 PowerShell **7+**（命令 `pwsh`，不是 Windows PowerShell 5.1）、Node/npm、WebView2 x64，并确保 `delivery/` 只有一个 `*-Setup.exe`。`smoke.ps1` 会通过 npm 安装固定的 `playwright-core@1.56.1` 并连接已打开的 WebView2，不需另下载 Chromium；运行独立的 Node 验收脚本前可手动执行同样的 npm 命令：
 

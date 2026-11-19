@@ -23,6 +23,12 @@
 - 网页版回归：`verification/timeline_output_dismiss.mjs`（六段旅程）进 canvas 车道；装机验收：
   `verification/render.mjs` 在**真实安装版 WebView2 窗口**里复现空时间线 → 失败卡 → 关闭 → 真实渲染的完整链路，
   专程录像 `delivery/windows-timeline-dismiss.mp4`（CI 产物）。
+- **沙箱 A/B 实录**（本仓库 `delivery/`）：未打补丁的上游原树复现截图 `web-unpatched-stuck-card.png`
+  （与用户截图一致：只有「重试输出」，Esc/Delete 无效、重试同样失败）；打补丁后
+  `web-patched-empty-toast.png`（原地 toast）、`web-patched-failed-card.png`（三键失败卡）、
+  `web-patched-after-close.png`（关闭后干净画布）；完整操作录像 `desktop9-dismiss-demo.mp4`
+  （修复前卡死 → 修复后拒绝/三键/关闭，约 3 分钟，H.264）。同一沙箱里 `npm test` 931/931、
+  `check:i18n`、`check:browser-manifest`、`npm run build` 全绿。
 - 细节见 [DESKTOP-PARITY-REVIEW.md](DESKTOP-PARITY-REVIEW.md)（含 PR #397 借鉴分析与同类产品对照）。
 
 ### 画布布局（desktop.6 新增）

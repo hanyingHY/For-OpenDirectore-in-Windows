@@ -2,7 +2,7 @@
 
 面向 Windows x64 的非官方桌面发行版。安装后从开始菜单打开 **OpenDirector**，无需命令行、Python 环境或本地开发服务器。不是网页快捷方式，也不连接某个托管的 OpenDirector 网站。
 
-**desktop.10（本分支）**：交付基线推进到上游 `ab3f0585`（当前 `main` 头）。构建、原生 Agent 车道、装机冒烟与渲染验收由 [Windows x64 desktop 工作流](../../actions/workflows/windows.yml) 在 `windows-2022` runner 上执行；安装包在 run 页面的 `Windows-installer-x64` 构件里，原生窗口截图与录像在 `Windows-native-evidence` 里。本轮修复的时间线「失败卡」问题（用户报告：卡片关不掉）见 [DESKTOP-PARITY-REVIEW.md §0](DESKTOP-PARITY-REVIEW.md)——含网页版 A/B 录像与逐条判据：
+**desktop.10（本分支）**：交付基线推进到上游 `ab3f0585`（当前 `main` 头）。构建、原生 Agent 车道、装机冒烟与渲染验收由 [Windows x64 desktop 工作流](../../actions/workflows/windows.yml) 在 `windows-2022` runner 上执行，本轮 [run 44527172841](https://github.com/hanyingHY/For-OpenDirectore-in-Windows/actions/runs/44527172841) 通过：`package.py` 装配 + 原生 Agent 写入（确定性模型）+ NSIS 编译 + 装机冒烟（`OD_VERIFY_RENDER=1`：静默安装、启动、双语存储、真实 H.264 渲染与 ffprobe 核验），产物 `Windows-installer-x64`（195 MB）与 `Windows-native-evidence`（4.4 MB 装机截图/录像）挂在同一 run；[run 44527172840](https://github.com/hanyingHY/For-OpenDirectore-in-Windows/actions/runs/44527172840)（frontend/backend/canvas/voice/assistant 五车道）与本轮 [离线检查](https://github.com/hanyingHY/For-OpenDirectore-in-Windows/actions/runs/44527669259) 同样通过。安装包在 run 页面的 `Windows-installer-x64` 构件里，原生窗口截图与录像在 `Windows-native-evidence` 里。`sign-update` / `update-handoff` 维持按仓库与 `main` 分支跳过（候选分支不进稳定频道）。本轮修复的时间线「失败卡」问题（用户报告：卡片关不掉）见 [DESKTOP-PARITY-REVIEW.md §0](DESKTOP-PARITY-REVIEW.md)——含网页版 A/B 录像与逐条判据：
 
 | 证据（本分支实录） | 文件 |
 | --- | --- |

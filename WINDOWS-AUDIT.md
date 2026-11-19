@@ -46,3 +46,14 @@ desktop.6 新增：画布自动创建节点会避让已占位置（64 单位间�
 | P6–P7 | README 给出 `pwsh`、固定 Playwright 版本和验收命令；CI 归档摘要与源代码重建产物分别校验。 |
 
 [最新窗口录像](delivery/desktop.7-windows-workflow.mp4) 与 [导出文件](delivery/desktop.7-timeline-export.mp4) 对应 [归档 EXE 校验和](delivery/SHA256SUMS.txt)。未覆盖所有 Win11 中文客户端的硬件/GPU 组合、真实第三方账号及上游每一个可选集成。
+
+## desktop.10：本分支验收记录（上游基线 ab3f0585）
+
+| 判据 | 结果 |
+| --- | --- |
+| Windows 装机车道（[run 44527172841](https://github.com/hanyingHY/For-OpenDirectore-in-Windows/actions/runs/44527172841)） | package.py 装配、原生 Agent skill 写入（确定性模型）、NSIS 编译、装机冒烟（`OD_VERIFY_RENDER=1`）全部通过；产物 `Windows-installer-x64`（194,851,731 B）与 `Windows-native-evidence`（4,389,277 B）挂在同一 run。冒烟含时间线空素材 toast、失败卡三出口 + 关闭、真实 640×400 H.264 渲染与 ffprobe 核验（`verification/render.mjs`）。 |
+| 五车道回归（[run 44527172840](https://github.com/hanyingHY/For-OpenDirectore-in-Windows/actions/runs/44527172840)） | frontend / backend / canvas / voice / assistant 全绿；canvas 车道含 `verification/timeline_output_dismiss.mjs`（判据 + 键盘可达 + Escape）。 |
+| 离线检查（[run 44527669259](https://github.com/hanyingHY/For-OpenDirectore-in-Windows/actions/runs/44527669259)） | 传输/更新验证单测、`compileall`、脚本语法、landing 覆盖通过。 |
+| 网页版 A/B（本仓库实录，`delivery/preview/`） | 未打补丁：失败卡仅「重试输出」，Escape / 点空白 / 右键全部无效（与用户报告一致）；打补丁后：toast 回答 + 编辑/重试/关闭 + 焦点落出口 + Escape，关闭无孤儿输出、引用不卡死。校验值见 `delivery/SHA256SUMS.txt`。 |
+| 仍待人工 | 双击安装、UAC/卸载页与中文 IME 的肉眼验收（B1）；SmartScreen 教育（B2）；更新节奏手感（B3）——见 [DESKTOP-PARITY-REVIEW.md §8](DESKTOP-PARITY-REVIEW.md)。sign-update/update-handoff 在候选分支按设计跳过，合入 `main` 后自动启用。 |
+

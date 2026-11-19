@@ -105,11 +105,16 @@ try {
     await (await import('../verification/sidebar.mjs')).sidebarCheck(page);
     await page.locator(`.react-flow__node[data-id="${nodeId}"] img.cw-image-preview`).waitFor();
     await finishSidebar('delivery/windows-sidebar.mp4');
+    // desktop.9 (RFC #362): the timeline output failure card journey gets its own
+    // recording so the close/refusal behaviour is reviewable without scrubbing a
+    // long workflow capture. One CDP screencast at a time keeps frames honest.
+    const finishDismiss=(modern && process.env.OD_VERIFY_RENDER==='1')?await recordWindow():null;
+    if(process.env.OD_VERIFY_RENDER==='1') { stage='timeline output failure card and render MP4'; await (await import('../verification/render.mjs')).renderCheck(page,app); }
+    if(finishDismiss) await finishDismiss('delivery/windows-timeline-dismiss.mp4');
     const finishCapture=modern?await recordWindow():null;
     stage='installed image editors';
     await (await import('../verification/image-edits.mjs')).imageEdits(page,project,nodeId);
     if(modern){ stage='installed Agent chat'; await (await import('../verification/agent-window.mjs')).agentWindow(page,project); }
-    if(process.env.OD_VERIFY_RENDER==='1') { stage='render MP4'; await (await import('../verification/render.mjs')).renderCheck(page,app); }
     if(finishCapture) await finishCapture('delivery/windows-workflow.mp4');
   }
   process.exit(0);

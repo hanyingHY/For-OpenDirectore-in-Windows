@@ -29,7 +29,7 @@ desktop.6 新增：画布自动创建节点会避让已占位置（64 单位间�
 ## 可核对的证据与仍需人工验收的部分
 
 - [原生 Windows 构建、安装测试、更新清单签名及安装重启](https://github.com/hanyingHY/For-OpenDirector/actions/runs/44297067032)；[同一份安装器的独立跨版本验收](https://github.com/hanyingHY/For-OpenDirector/actions/runs/44299900134)。构建源码 `049daf0`；实际安装包以 `delivery/SHA256SUMS.txt` 指纹为准，不用 Git 提交号代替文件校验。
-- [旧版画布重叠与自动排列修复](delivery/canvas-debug.mp4) → [desktop.6 完整 Windows 工作流](delivery/studio-walkthrough.mp4) → [真正导出的 MP4](delivery/timeline-export.mp4)。演示为真实窗口截图帧；录像压缩了没有界面变化的等待时间，不能用来比较推理速度。
+- desktop.6 那三份演示（画布重叠与自动排列修复、完整 Windows 工作流、真正导出的 MP4）**不在本仓库的文件里**：它们只作为那两个 run 的构建工件存在，需要登录 GitHub 在 run 页面下载。此前文档把它们写成 `delivery/*.mp4` 的相对链接，那是从兄弟仓库继承下来的死链，本轮改成这个说明，而不是留一个点不开的链接。演示为真实窗口截图帧；录像压缩了没有界面变化的等待时间，不能用来比较推理速度。
 - 本轮有原生运行记录的异常路径包括并行安装竞争、上次目录交换中断且重试暂存失败、未认证访问、第二写入会话、旧端口已占用、宿主被终止、错误数据目录和运行时拒绝覆盖安装。未把每一个托盘菜单项的手动点击、每一种中断时机或任意第三方模型/编码器算作自动化通过。量产前仍应在正式 Win10/Win11 机型上核对托盘授权与拒绝、真实服务商恢复、SmartScreen 和系统编码器。
 
 ## desktop.7：P1–P7 回归记录
@@ -45,7 +45,9 @@ desktop.6 新增：画布自动创建节点会避让已占位置（64 单位间�
 | P5 | 本地测试覆盖跨启动间隔、手动检查、模拟 HTTP 403 `Retry-After` 和损坏状态文件；不需要故意用完 GitHub 的共享限额。 |
 | P6–P7 | README 给出 `pwsh`、固定 Playwright 版本和验收命令；CI 归档摘要与源代码重建产物分别校验。 |
 
-[最新窗口录像](delivery/desktop.7-windows-workflow.mp4) 与 [导出文件](delivery/desktop.7-timeline-export.mp4) 对应 [归档 EXE 校验和](delivery/SHA256SUMS.txt)。未覆盖所有 Win11 中文客户端的硬件/GPU 组合、真实第三方账号及上游每一个可选集成。
+desktop.7 的窗口录像与导出文件同样只在 CI 工件里（`delivery/desktop.7-*.mp4` 这些路径在本分支不存在，是继承来的死链，已作废）。
+
+`delivery/SHA256SUMS.txt` **现在只覆盖本轮三段录像**（见下表），清单就是 `delivery/SHA256SUMS.txt` 本身；不要把它当成历史 EXE 的指纹来源，EXE 的校验和以对应 run 的工件与发布说明为准。未覆盖所有 Win11 中文客户端的硬件/GPU 组合、真实第三方账号及上游每一个可选集成。
 
 ## desktop.9：时间线失败卡的出口（交互层，本轮）
 
@@ -68,7 +70,7 @@ desktop.6 新增：画布自动创建节点会避让已占位置（64 单位间�
 | 安装包 | `windows-2022` 出包成功，`Windows-installer-x64` = 194,852,844 B（无 Authenticode 签名） |
 | 装机后验收 | `smoke.ps1`（`OD_VERIFY_RENDER=1`）通过：静默安装 → 启动 → 健康检查 → 真实渲染 |
 | Agent | `agent-check.ps1` 通过（技能 + 工程写入，确定性假模型，不触网） |
-| 装机证据 | `Windows-native-evidence` = 4,841,972 B，内含 `delivery/windows-*.png`、`*.mp4`、`timeline-export.mp4` |
+| 装机证据 | `Windows-native-evidence` = 4,841,972 B；`windows.yml` 为该工件配置的采集路径是 `delivery/windows-*.png`、`delivery/windows-*.mp4`、`delivery/timeline-export.mp4`（`if-no-files-found: warn`），逐文件内容要在 run 页面核对——沙箱拉不到工件，见 [DESKTOP-PARITY-REVIEW.md](DESKTOP-PARITY-REVIEW.md) §8 B4 |
 | 发布签名 | `sign-update` / `update-handoff` 被仓库与分支门槛跳过（`hanyingHY/For-OpenDirector` + `main` 才跑），与既往一致 |
 | 未覆盖 | 人在场时的桌面交互：双击安装、自定义目录、中文 IME、退出确认弹窗的肉眼验收；runner 是服务会话，给不了这一层 |
 

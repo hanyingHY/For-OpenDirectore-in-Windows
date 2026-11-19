@@ -9,6 +9,8 @@ permissions:
 jobs:
   package:
     runs-on: windows-2022
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -44,6 +46,24 @@ jobs:
             delivery/windows-*.png
             delivery/windows-*.mp4
             delivery/timeline-export.mp4
+      # Mirrors the same evidence onto a rolling branch: artifact downloads are
+      # served from the Azure blob CDN, which some sandboxes cannot reach, while
+      # a git push always lands on github.com. The branch is force-rewritten to
+      # a single root commit so it never grows history.
+      - name: Publish evidence branch
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(delivery/windows-*.png delivery/windows-*.mp4 delivery/timeline-export.mp4)
+          if [ ${#files[@]} -eq 0 ]; then echo "no evidence files yet"; exit 0; fi
+          git config user.name "evidence-bot"
+          git config user.email "evidence-bot@users.noreply.github.com"
+          git checkout --orphan evidence-publish
+          git rm -r --cached . -q
+          git add -f -- "${files[@]}"
+          git commit -q -m "Native simulation evidence for ${GITHUB_SHA}"
+          git push --force origin HEAD:evidence/windows-native
   sign-update:
     needs: package
     if: github.repository == 'hanyingHY/For-OpenDirector' && github.ref == 'refs/heads/main'

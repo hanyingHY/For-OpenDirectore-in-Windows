@@ -32,6 +32,9 @@ using System.Runtime.InteropServices;
 public static class DesktopProbe {
     [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr wparam, IntPtr lparam);
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
+    [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr hwnd, int x, int y, int w, int h, bool repaint);
+    [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
 }
 '@
 function Test-UI($phase) {
@@ -54,13 +57,34 @@ function Test-UI($phase) {
         if ($LASTEXITCODE) { Get-Content "$env:LOCALAPPDATA\OpenDirector\Desktop\desktop.log" -Tail 12 -ErrorAction SilentlyContinue | ForEach-Object { Write-Output "::warning::$_" }; throw "UI probe failed: $phase" }
         if ($modern) {
             $proc.Refresh()
+            if ($phase -eq 'reopen') {
+                $saved=(Get-Content "$env:LOCALAPPDATA\OpenDirector\Desktop\window.txt" -ErrorAction Stop).Trim()
+                $now=New-Object DesktopProbe+RECT
+                [DesktopProbe]::GetWindowRect($proc.MainWindowHandle,[ref]$now) | Out-Null
+                $actual="$($now.Left),$($now.Top),$($now.Right-$now.Left),$($now.Bottom-$now.Top),0"
+                if ($actual -ne $saved) { throw "Window geometry not restored: saved=$saved actual=$actual" }
+                Write-Output "PASS: window geometry restored after relaunch ($actual)"
+            }
             # SC_CLOSE is the title-bar X. A bare WM_CLOSE from CloseMainWindow
             # is categorized by WinForms as a Task Manager shutdown, not UserClosing.
             $window=$proc.MainWindowHandle
+            if ($phase -eq 'create') {
+                # C3: window geometry is remembered across hide + relaunch.
+                if (![DesktopProbe]::MoveWindow($window,120,140,1100,720,$true)) { throw 'Could not move main window' }
+                Start-Sleep -Milliseconds 800
+                $moved=New-Object DesktopProbe+RECT
+                [DesktopProbe]::GetWindowRect($window,[ref]$moved) | Out-Null
+                $script:movedRect="$($moved.Left),$($moved.Top),$($moved.Right-$moved.Left),$($moved.Bottom-$moved.Top)"
+            }
             if (($window -eq [IntPtr]::Zero) -or ![DesktopProbe]::IsWindowVisible($window) -or ![DesktopProbe]::PostMessage($window,0x112,[IntPtr]0xF060,[IntPtr]::Zero)) { throw 'Could not request window close' }
             $until=[DateTime]::UtcNow.AddSeconds(5)
             while ([DesktopProbe]::IsWindowVisible($window) -and [DateTime]::UtcNow -lt $until) { Start-Sleep -Milliseconds 100 }
             if ($proc.HasExited -or [DesktopProbe]::IsWindowVisible($window)) { throw "Close did not hide main HWND; exited=$($proc.HasExited)" }
+            if ($phase -eq 'create') {
+                $saved=(Get-Content "$env:LOCALAPPDATA\OpenDirector\Desktop\window.txt" -ErrorAction Stop).Trim()
+                if ($saved -ne "$script:movedRect,0") { throw "Window geometry not saved on hide: saved=$saved expected=$script:movedRect" }
+                Write-Output "PASS: window geometry saved on hide ($saved)"
+            }
             $second=Start-Process "$root\app\OpenDirector.exe" -PassThru
             if (!$second.WaitForExit(5000) -or $second.ExitCode -ne 0) { throw 'Second launch did not hand off' }
             $until=[DateTime]::UtcNow.AddSeconds(5)

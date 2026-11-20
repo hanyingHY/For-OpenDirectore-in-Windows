@@ -21,6 +21,7 @@ internal static class Host {
     static readonly string Secret = NewSecret();
     static readonly TaskCompletionSource<int> Ready = new TaskCompletionSource<int>();
     static readonly string Ticket = Path.Combine(State,"session.bin");
+    static readonly string WindowFile = Path.Combine(State,"window.txt");
     internal static readonly Icon AppIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
     static Process service;
     static Updates updates;
@@ -112,10 +113,38 @@ internal static class Host {
             base.WndProc(ref m);
         }
     }
+    // Window geometry is user preference, not project data: keep it in the
+    // desktop state folder, validate it on load, and never let a stale monitor
+    // layout place the window off-screen.
+    static void SaveWindow(Form form) {
+        try {
+            var b = form.WindowState==FormWindowState.Normal ? form.Bounds : form.RestoreBounds;
+            int max = form.WindowState==FormWindowState.Maximized ? 1 : 0;
+            File.WriteAllText(WindowFile, b.X+","+b.Y+","+b.Width+","+b.Height+","+max);
+        } catch(IOException) {} catch(UnauthorizedAccessException) {}
+    }
+    static void RestoreWindow(Form form) {
+        try {
+            if(!File.Exists(WindowFile)) return;
+            var p=File.ReadAllText(WindowFile).Trim().Split(',');
+            if(p.Length!=5) return;
+            var r=new Rectangle(int.Parse(p[0]),int.Parse(p[1]),int.Parse(p[2]),int.Parse(p[3]));
+            if(r.Width<form.MinimumSize.Width || r.Height<form.MinimumSize.Height || r.Width>20000 || r.Height>20000) return;
+            bool visible=false;
+            foreach(var screen in Screen.AllScreens) {
+                var area=Rectangle.Intersect(screen.WorkingArea,r);
+                if(area.Width>=160 && area.Height>=120) { visible=true; break; }
+            }
+            if(!visible) return;
+            form.StartPosition=FormStartPosition.Manual; form.Bounds=r;
+            if(p[4]=="1") form.WindowState=FormWindowState.Maximized;
+        } catch(Exception ex) { Write("Window state ignored: "+ex.Message); }
+    }
     static Form Window(bool primary=false) {
         Form form=primary?(Form)new MainWindow():new Form();
         form.Text="OpenDirector"; form.Icon=AppIcon; form.Size=new Size(1440,900); form.MinimumSize=new Size(800,560);
         form.StartPosition=FormStartPosition.CenterScreen; form.BackColor=Color.FromArgb(24,24,24);
+        if(primary) RestoreWindow(form);
         return form;
     }
     static async Task Mount(Form form, string address) {
@@ -159,6 +188,29 @@ internal static class Host {
         } finally { core.NavigationCompleted-=onLoad; }
         core.Navigate(address);
     }
+    static bool WebView2Available() {
+        try { return !string.IsNullOrEmpty(CoreWebView2Environment.GetAvailableBrowserVersionString()); }
+        catch(WebView2RuntimeNotFoundException) { return false; }
+        catch(Exception ex) { Write("WebView2 probe failed: "+ex); return false; }
+    }
+    // Bilingual, actionable: offer the official download page, then exit cleanly
+    // instead of starting the service and failing later.
+    static void NeedWebView2() {
+        Write("WebView2 Evergreen Runtime (x64) not found");
+        var choice=MessageBox.Show(
+            "OpenDirector needs Microsoft Edge WebView2 Evergreen Runtime (x64).\n\n" +
+            "Yes: open the Microsoft download page; install it, then reopen OpenDirector.\n" +
+            "No: close.\n\n" +
+            "需要安装微软 WebView2 Evergreen 运行时（x64）。\n" +
+            "是：打开官方下载页，安装后重新打开 OpenDirector。\n" +
+            "否：关闭。\n\n日志 / Log: " + Log,
+            "OpenDirector", MessageBoxButtons.YesNo, MessageBoxIcon.Error);
+        if(choice==DialogResult.Yes) {
+            try { Process.Start(new ProcessStartInfo("https://developer.microsoft.com/microsoft-edge/webview2/") { UseShellExecute=true }); }
+            catch(Exception ex) { Write(ex.ToString()); }
+        }
+        closing=true; main.Close();
+    }
     static void Error(Exception e) { Write(e.ToString()); MessageBox.Show(e.Message + "\n\nDiagnostics / 日志: " + Log,"OpenDirector", MessageBoxButtons.OK,MessageBoxIcon.Error); }
     static void Fail(Exception e) { if(closing) return; closing=true; Error(e); main.Close(); }
     [STAThread] public static void Main() {
@@ -178,6 +230,7 @@ internal static class Host {
                 wake.Tick+=(s,e)=>{ if(!closing && activation.WaitOne(0)) { Restore(); Write("Activated existing window"); } };
                 wake.Start();
                 main.Shown += async (s,e) => { try {
+                    if(!WebView2Available()) { NeedWebView2(); return; }
                     StartService();
                     if(await Task.WhenAny(Ready.Task,Task.Delay(60000))!=Ready.Task || (port=await Ready.Task)==0) throw new Exception("Local service did not start. Check the diagnostic log. / 服务启动失败，请检查诊断日志。");
                     Write("Local service ready on loopback port " + port);
@@ -192,6 +245,7 @@ internal static class Host {
                   catch(Exception ex) { Fail(ex); } };
                 main.FormClosing += (s,e) => {
                     if(!closing && updates!=null && updates.Applying) { e.Cancel=true; return; }
+                    SaveWindow(main);
                     if(!closing && updates!=null && e.CloseReason==CloseReason.UserClosing) { e.Cancel=true; main.Hide(); updates.Hidden(); return; }
                     closing=true;
                 };

@@ -1,0 +1,88 @@
+diff --git a/packages/core/src/opendirector/agent/model_gateway.py b/packages/core/src/opendirector/agent/model_gateway.py
+index a87c89f..f26d89f 100644
+--- a/packages/core/src/opendirector/agent/model_gateway.py
++++ b/packages/core/src/opendirector/agent/model_gateway.py
+@@ -12,6 +12,15 @@ import httpx
+ 
+ from opendirector.domain.projects import ProjectError
+ from opendirector.integrations.chat_completions import chat_payload
++
++UPSTREAM_TIMEOUT_BODY = json.dumps({"error": {"message": (
++    "模型服务超过 120 秒未返回数据，已停止本次请求，未自动重试。"
++    " / The model service did not respond within 120 seconds; this request was stopped and not retried."
++)}}, ensure_ascii=False).encode()
++UPSTREAM_FAILED_BODY = json.dumps({"error": {"message": (
++    "模型服务请求失败，已停止本次请求，未自动重试。"
++    " / The model service request failed; it was stopped and not retried."
++)}}, ensure_ascii=False).encode()
+ from opendirector.integrations.http_settings import (
+     MODEL_HTTP_HOOKS,
+     MODEL_JOB_CONTEXT,
+@@ -124,7 +133,7 @@ class ModelGateway:
+                     transport=self.transport,
+                     event_hooks=MODEL_HTTP_HOOKS,
+                     trust_env=trust_environment(url, config=self.config),
+-                    timeout=httpx.Timeout(120, connect=15),
++                    timeout=httpx.Timeout(120, connect=30),
+                 ) as client:
+                     async with client.stream(
+                         "POST",
+@@ -196,11 +205,19 @@ class ModelGateway:
+                 f"agent.model.error turn_id={self.turn_id} failure={type(failure).__name__}"
+             )
+             if not status_sent:
+-                status = failure.status if isinstance(failure, ProjectError) else 502
+-                # Do not expose provider credentials or local exception messages.
++                # OpenCode retries 5xx responses automatically and re-sends the
++                # same paid model request, which left turns "thinking" forever
++                # (#345). Upstream failures therefore use a non-retryable 424
++                # with a fixed bilingual message: no credentials, no exception text.
++                if isinstance(failure, ProjectError):
++                    status, body = failure.status, b""
++                else:
++                    timed_out = isinstance(failure, (httpx.TimeoutException, TimeoutError))
++                    status, body = 424, UPSTREAM_TIMEOUT_BODY if timed_out else UPSTREAM_FAILED_BODY
+                 with suppress(OSError):
+                     writer.write(
+-                        f"HTTP/1.1 {status} Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".encode()
++                        f"HTTP/1.1 {status} Error\r\nContent-Type: application/json\r\nContent-Length: {len(body)}\r\nConnection: close\r\n\r\n".encode()
++                        + body
+                     )
+                     await writer.drain()
+         finally:
+diff --git a/tests/test_model_gateway.py b/tests/test_model_gateway.py
+index 14d5131..62b4c2d 100644
+--- a/tests/test_model_gateway.py
++++ b/tests/test_model_gateway.py
+@@ -144,10 +144,12 @@ def test_provider_error_body_has_a_complete_response_boundary(tmp_path):
+     asyncio.run(run())
+ 
+ 
+-@pytest.mark.parametrize('kind, expected', [('transport', 502), ('validation', 413)])
++@pytest.mark.parametrize('kind, expected', [('connect', 424), ('timeout', 424), ('validation', 413)])
+ def test_failure_before_response_headers_has_a_bounded_error(tmp_path, monkeypatch, kind, expected):
+     async def run():
+         def handler(_):
++            if kind == 'timeout':
++                raise httpx.ReadTimeout('private-token')
+             raise httpx.ConnectError('private-token')
+         if kind == 'validation':
+             def rejected(*args):
+@@ -157,8 +159,15 @@ def test_failure_before_response_headers_has_a_bounded_error(tmp_path, monkeypat
+             async with httpx.AsyncClient(trust_env=False, timeout=3) as client:
+                 async with request(client, url) as response:
+                     assert response.status_code == expected
+-                    assert response.headers['content-length'] == '0'
+-                    assert await response.aread() == b''
++                    body = await response.aread()
++                    # Upstream failures are not retryable by OpenCode (4xx) and carry
++                    # a fixed bilingual message; validation errors stay body-less.
++                    if kind == 'validation':
++                        assert response.headers['content-length'] == '0' and body == b''
++                    else:
++                        assert json.loads(body)['error']['message']
++                        assert 'private-token' not in body.decode()
++                        assert '未自动重试' in body.decode() and 'not retried' in body.decode()
+     asyncio.run(run())
+ 
+ 

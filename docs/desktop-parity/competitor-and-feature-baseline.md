@@ -68,7 +68,9 @@ PR #397 为 FayeSpica 的桌面版 Electron 方案，包含：可折叠项目侧
 | Electron 外壳 | 不采用 | 已选择 WebView2 原生宿主，保留现有更小的攻击面 |
 | Desktop Release 冒烟测试 | 采用（思路） | 对应现有 `windows.yml` 的 smoke 流程 |
 
-## 4. 改进候选（待用户排序）
+## 4. 改进候选（第一轮）
+
+第二轮扩展的完整候选（约 60 项，含上游 issue/PR 映射、双模式切换评估）见 [改进候选 Backlog](improvement-backlog.md)。以下为第一轮摘要。
 
 按"对标 OpenCode/即梦体验的收益 ÷ 在 Windows 上的可验证性"排序：
 

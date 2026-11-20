@@ -2,6 +2,11 @@
 $ErrorActionPreference='Stop'
 trap { Write-Output ("::error::Smoke line {0}: {1}" -f $_.InvocationInfo.ScriptLineNumber,$_.Exception.Message); exit 1 }
 Get-ChildItem -Path delivery/windows-*.png,delivery/windows-*.mp4,delivery/timeline-export.mp4 -ErrorAction SilentlyContinue | Remove-Item
+# Every PASS is also written to a report file that the workflow publishes to the
+# evidence branch, so each real-Windows run can be audited without its job log.
+$report='delivery/windows-smoke-report.txt'
+Remove-Item $report -ErrorAction SilentlyContinue
+function Pass([string]$message) { Write-Output ('PASS: ' + $message); Add-Content -Path $report -Value ('PASS: ' + $message) }
 $installer = (Get-ChildItem delivery/*.exe).FullName
 $root = Join-Path $env:LOCALAPPDATA 'Programs\OpenDirector'
 $tempRoot=[IO.Path]::GetTempPath()
@@ -63,7 +68,7 @@ function Test-UI($phase) {
                 [DesktopProbe]::GetWindowRect($proc.MainWindowHandle,[ref]$now) | Out-Null
                 $actual="$($now.Left),$($now.Top),$($now.Right-$now.Left),$($now.Bottom-$now.Top),0"
                 if ($actual -ne $saved) { throw "Window geometry not restored: saved=$saved actual=$actual" }
-                Write-Output "PASS: window geometry restored after relaunch ($actual)"
+                Pass "window geometry restored after relaunch ($actual)"
             }
             # SC_CLOSE is the title-bar X. A bare WM_CLOSE from CloseMainWindow
             # is categorized by WinForms as a Task Manager shutdown, not UserClosing.
@@ -83,7 +88,7 @@ function Test-UI($phase) {
             if ($phase -eq 'create') {
                 $saved=(Get-Content "$env:LOCALAPPDATA\OpenDirector\Desktop\window.txt" -ErrorAction Stop).Trim()
                 if ($saved -ne "$script:movedRect,0") { throw "Window geometry not saved on hide: saved=$saved expected=$script:movedRect" }
-                Write-Output "PASS: window geometry saved on hide ($saved)"
+                Pass "window geometry saved on hide ($saved)"
             }
             $second=Start-Process "$root\app\OpenDirector.exe" -PassThru
             if (!$second.WaitForExit(5000) -or $second.ExitCode -ne 0) { throw 'Second launch did not hand off' }
@@ -110,7 +115,7 @@ function Test-UI($phase) {
                 $blocked=Start-Process $uninstaller -ArgumentList '/S' -Wait -PassThru
                 if ($blocked.ExitCode -ne 2 -or $proc.HasExited -or $before -ne (Get-FileHash "$root\app\OpenDirector.exe").Hash -or
                     $beforeUninstall -ne (Get-FileHash $uninstaller).Hash -or !(Test-Path $arp)) { throw "Live /S uninstall not refused safely (exit=$($blocked.ExitCode))" }
-                Write-Output 'PASS: PE version metadata, ARP fields and bare Uninstall.exe /S returns 2 while running'
+                Pass 'PE version metadata, ARP fields and bare Uninstall.exe /S returns 2 while running'
                 ./verification/quit.ps1 -HostId $proc.Id -Agents 0 -Accept
                 if (Test-Path "$env:LOCALAPPDATA\OpenDirector\Desktop\session.bin") { throw 'Clean exit left a CLI ticket' }
                 $offline=(& "$root\app\OpenDirector-CLI.exe" project list | Out-String)
@@ -118,7 +123,7 @@ function Test-UI($phase) {
                 & "$root\app\OpenDirector-CLI.exe" --help | Out-Null
                 if ($LASTEXITCODE) { throw 'CLI help must work without a live desktop' }
             }
-            Write-Output 'PASS: occupied legacy port, authenticated desktop, hide and single-instance restore'
+            Pass 'occupied legacy port, authenticated desktop, hide and single-instance restore'
         }
     } finally {
         if ($occupied) { $occupied.Stop() }
@@ -159,7 +164,7 @@ Test-UI 'reopen'
 if ((Get-FileHash $fakeDb).Hash -ne $dbHash) { throw 'Bundled Agent modified external OpenCode database' }
 $privateDb=Join-Path $env:LOCALAPPDATA 'OpenDirector\Desktop\agent-runtime\opencode-v1\data\opencode\opencode.db'
 if (!(Test-Path $privateDb)) { throw 'Missing private Agent database' }
-Write-Output 'PASS: skills and native turn succeeded with incompatible inherited XDG data; external database unmodified'
+Pass 'skills and native turn succeeded with incompatible inherited XDG data; external database unmodified'
 # Broken user-selected root: startup must fail with actionable native diagnostics,
 # not open an empty canvas or destroy the inaccessible workspace.
 $validRoot=$env:OPENDIRECTOR_ROOT

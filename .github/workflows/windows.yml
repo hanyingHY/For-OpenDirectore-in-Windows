@@ -45,6 +45,7 @@ jobs:
           path: |
             delivery/windows-*.png
             delivery/windows-*.mp4
+            delivery/windows-*.txt
             delivery/timeline-export.mp4
       # Mirrors the same evidence onto a rolling branch: artifact downloads are
       # served from the Azure blob CDN, which some sandboxes cannot reach, while
@@ -55,7 +56,7 @@ jobs:
         shell: bash
         run: |
           shopt -s nullglob
-          files=(delivery/windows-*.png delivery/windows-*.mp4 delivery/timeline-export.mp4)
+          files=(delivery/windows-*.png delivery/windows-*.mp4 delivery/windows-*.txt delivery/timeline-export.mp4)
           if [ ${#files[@]} -eq 0 ]; then echo "no evidence files yet"; exit 0; fi
           git config user.name "evidence-bot"
           git config user.email "evidence-bot@users.noreply.github.com"

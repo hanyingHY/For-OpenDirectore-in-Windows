@@ -1,8 +1,11 @@
 """Transport-only checks; the Windows workflows cover the actual PE and GUI."""
 import hashlib
 import hmac
+import tempfile
 import unittest
-from desktop.service import DesktopSession, HOST, ORIGIN
+from pathlib import Path
+
+from desktop.service import DesktopSession, SessionJournal, HOST, ORIGIN
 
 
 class TransportTests(unittest.IsolatedAsyncioTestCase):
@@ -52,3 +55,39 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
     async def test_lifespan_is_owned_by_upstream(self):
         await self.session({'type': 'lifespan'}, None, self.send)
         self.assertEqual(self.calls, ['lifespan'])
+
+    async def test_renderer_sessions_are_journalled_for_crash_recovery(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'sessions.txt'
+            journal = SessionJournal(path)
+            self.session = DesktopSession(self.session.app, b'secret', journal=journal)
+            renderer = 'a' * 8 + '-1111-2222-3333-' + 'b' * 12
+            await self.dispatch(host=HOST, origin=ORIGIN,
+                                **{'x-opendirector-desktop': 'secret', 'x-opendirector-session': renderer})
+            self.assertEqual(self.session.browser_sessions, {renderer})
+            self.assertIn(renderer, path.read_text(encoding='ascii'))
+
+            class Store:
+                released = []
+                def release(self, session): self.released.append(session)
+
+            # A new instance (the same file after a kill) restores and clears.
+            store = Store()
+            SessionJournal(path).restore(store)
+            self.assertEqual(store.released, [renderer])
+            self.assertFalse(path.exists())
+
+    async def test_journal_ignores_malformed_sessions_and_cli_origin(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'sessions.txt'
+            journal = SessionJournal(path)
+            self.session = DesktopSession(self.session.app, b'secret', 53122, journal=journal)
+            # A CLI-style call arrives on the dynamic port, not the renderer host.
+            await self.dispatch(host='127.0.0.1:53122',
+                                **{'x-opendirector-desktop': 'secret', 'x-opendirector-session': 'c' * 8 + '-1111-2222-3333-' + 'd' * 12})
+            self.assertFalse(journal.sessions)
+            # Malformed renderer session ids are not lease candidates.
+            await self.dispatch(host=HOST, origin=ORIGIN,
+                                **{'x-opendirector-desktop': 'secret', 'x-opendirector-session': '../escape'})
+            self.assertFalse(journal.sessions)
+            self.assertFalse(path.exists())

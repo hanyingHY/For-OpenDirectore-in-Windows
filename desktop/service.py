@@ -7,16 +7,64 @@ import re
 import socket
 import sys
 import threading
+from pathlib import Path
 
 # Browser storage namespace only. No process needs to listen on this port.
 HOST = '127.0.0.1:48765'
 ORIGIN = 'http://' + HOST
 
 
+class SessionJournal:
+    """Remembers the renderer sessions this desktop instance observed.
+
+    A killed process cannot release its leases; the next launch would find its
+    own dead sessions still holding projects "open elsewhere" until they
+    expire. The journal survives the kill, so startup can release exactly the
+    previous instance's renderer sessions. Only sessions observed on the
+    renderer origin (``HOST``) are recorded — independent CLI processes talk to
+    the dynamic service port and never appear here, so their leases are never
+    taken over."""
+
+    def __init__(self, path):
+        self.path = Path(path)
+        try:
+            self.sessions = {line for line in self.path.read_text(encoding='ascii').split() if line}
+        except (OSError, UnicodeDecodeError):
+            self.sessions = set()
+
+    def record(self, session):
+        if session in self.sessions:
+            return
+        self.sessions.add(session)
+        self._write()
+
+    def _write(self):
+        try:
+            temporary = self.path.with_suffix('.tmp')
+            temporary.write_text(''.join(s + '\n' for s in sorted(self.sessions)), encoding='ascii')
+            os.replace(temporary, self.path)
+        except OSError:
+            pass
+
+    def restore(self, store):
+        """Release every recorded lease (a previous instance's leftovers)."""
+        for session in sorted(self.sessions):
+            store.release(session)
+        self.clear()
+
+    def clear(self):
+        self.sessions = set()
+        try:
+            self.path.unlink()
+        except OSError:
+            pass
+
+
 class DesktopSession:
-    def __init__(self, app, token, port=None):
+    def __init__(self, app, token, port=None, journal=None):
         self.app = app
         self.browser_sessions = set()
+        self.journal = journal
         self.token = token
         self.hosts = {HOST.encode()}
         if port:
@@ -43,6 +91,8 @@ class DesktopSession:
                 sid = headers.get(b'x-opendirector-session', b'')
                 if re.fullmatch(rb'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}', sid):
                     self.browser_sessions.add(sid.decode())
+                    if self.journal is not None:
+                        self.journal.record(sid.decode())
         await self.app(scope, receive, send)
 
 
@@ -65,7 +115,13 @@ def main():
         from opendirector.infrastructure.local_projects import LocalProjects
         from opendirector.installation import data_root
         store = LocalProjects(data_root())
-        session = DesktopSession(create_app(store=store), token, port)
+        # A crashed previous instance cannot release its renderer leases; the
+        # journal remembers them across the kill so the canvas opens at once
+        # instead of waiting out every lease. Independent CLI leases are never
+        # journalled (see SessionJournal).
+        journal = SessionJournal(Path(os.environ.get('OD_DESKTOP_STATE', os.getcwd())) / 'sessions.txt')
+        journal.restore(store)
+        session = DesktopSession(create_app(store=store), token, port, journal)
         server = Service(uvicorn.Config(session, log_level='warning', access_log=False, proxy_headers=False))
         def stop():
             sys.stdin.buffer.readline()
@@ -74,6 +130,7 @@ def main():
         asyncio.run(server.serve(sockets=[listener]))
         for sid in session.browser_sessions:
             store.release(sid)
+        journal.clear()
         print('OD-DESKTOP-STOPPED', flush=True)
 
 if __name__ == '__main__': main()

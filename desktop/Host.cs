@@ -51,7 +51,11 @@ internal static class Host {
                 var forms=new System.Collections.Generic.List<Form>(); foreach(Form f in Application.OpenForms) forms.Add(f);
                 foreach(Form f in forms) foreach(Control c in f.Controls) {
                     var v=c as WebView2; if(v==null) continue;
-                    var inspect=v.ExecuteScriptAsync("!!document.querySelector('.cw-render-status progress,.cw-timeline-pending:not(:has(.cw-timeline-pending-error))')");
+                    // The app publishes data-od-exporting while any export or
+                    // render is in flight (refcounted, independent of layout).
+                    // Older bundles have no attribute: fall back to the render
+                    // status class names those builds still use.
+                    var inspect=v.ExecuteScriptAsync("document.documentElement.hasAttribute('data-od-exporting')||!!document.querySelector('.cw-render-status progress,.cw-timeline-pending:not(:has(.cw-timeline-pending-error))')");
                     if(await Task.WhenAny(inspect,Task.Delay(2500))!=inspect) throw new TimeoutException();
                     if(await inspect=="true") renders++;
                 }

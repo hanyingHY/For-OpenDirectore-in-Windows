@@ -2,7 +2,21 @@
 
 面向 Windows x64 的非官方桌面发行版。安装后从开始菜单打开 **OpenDirector**，无需命令行、Python 环境或本地开发服务器。不是网页快捷方式，也不连接某个托管的 OpenDirector 网站。
 
-**desktop.10（本分支）**：交付基线推进到上游 `ab3f0585`（当前 `main` 头）。构建、原生 Agent 车道、装机冒烟与渲染验收由 [Windows x64 desktop 工作流](../../actions/workflows/windows.yml) 在 `windows-2022` runner 上执行，本轮 [run 44527172841](https://github.com/hanyingHY/For-OpenDirectore-in-Windows/actions/runs/44527172841) 通过：`package.py` 装配 + 原生 Agent 写入（确定性模型）+ NSIS 编译 + 装机冒烟（`OD_VERIFY_RENDER=1`：静默安装、启动、双语存储、真实 H.264 渲染与 ffprobe 核验），产物 `Windows-installer-x64`（195 MB）与 `Windows-native-evidence`（4.4 MB 装机截图/录像）挂在同一 run；[run 44527172840](https://github.com/hanyingHY/For-OpenDirectore-in-Windows/actions/runs/44527172840)（frontend/backend/canvas/voice/assistant 五车道）与本轮 [离线检查](https://github.com/hanyingHY/For-OpenDirectore-in-Windows/actions/runs/44527669259) 同样通过。安装包在 run 页面的 `Windows-installer-x64` 构件里，原生窗口截图与录像在 `Windows-native-evidence` 里。`sign-update` / `update-handoff` 维持按仓库与 `main` 分支跳过（候选分支不进稳定频道）。本轮修复的时间线「失败卡」问题（用户报告：卡片关不掉）见 [DESKTOP-PARITY-REVIEW.md §0](DESKTOP-PARITY-REVIEW.md)——含网页版 A/B 录像与逐条判据：
+**desktop.11（本分支）**：本轮三件事——①**渲染导出宿主契约**：应用在任何导出/渲染进行中时于 `documentElement` 置位 `data-od-exporting`（进行中才置位，完成/失败即撤），Host.cs 优先读该属性、保留旧选择器兜底，并兼容 PR #397 的 `window.opendirectorDesktop.setExporting` 桥——退出确认与托盘从此不再误判；②**「他窗占用」自愈等待**：强杀/崩溃后 60 秒内重开同一项目，不再弹只能手动重连的错误卡，而是倒计时等待（约 75 秒）+「重新连接 / 返回画布首页」双出口，租约一到期自动进入，无点击；③**失败态出口纪律**：重试输出失败时用 Escape 即可关卡（此前焦点陷在卡片里）。真机全量功能模拟实录（九章：欢迎双语 → 画布入口 → 文本编辑 → 素材上传 → 时间线导入 → 真实 H.264 渲染（导出信号全程在位）→ 失败态三出口 → 强杀后自愈 → 中英切换）：
+
+| 证据（本分支实录） | 文件 |
+| --- | --- |
+| **真机全量功能模拟（desktop.11 九章，H.264）** | [delivery/desktop11-full-journey.mp4](delivery/desktop11-full-journey.mp4) |
+| 状态机旅程：导出信号契约（渲染进行中 44 采样置位/结束归零、失败路径零残留） | [verification/export_signal_contract.mjs](verification/export_signal_contract.mjs) |
+| 状态机旅程：他窗占用自愈（等待态双出口 + 零点击自动进入） | [verification/open_elsewhere_autoretry.mjs](verification/open_elsewhere_autoretry.mjs) |
+| 静态契约守卫（Host.cs 读取顺序、双语文案、打包补丁链顺序） | [tests/test_export_signal_contract.py](tests/test_export_signal_contract.py) |
+| 取舍与设计记录（PR #397 `desktop:exporting` 取「信号」弃「桥」；上游 Fit all 静默失效候选缺陷） | [DESKTOP-PARITY-REVIEW.md](DESKTOP-PARITY-REVIEW.md) |
+
+> 三条旅程与全量录像均在隔离 fixture（`tests/browser/creation_server.py`）+ 真实浏览器窗口上驱动，渲染为浏览器自身 H.264 编码（与装机版同一 WebCodecs 路径）；`tests/test_export_signal_contract.py` + `tests/test_transport.py` 13 项 + 上游 `npm test` 930/930 全绿。canvas 工作流（五车道 + 三条旅程）随本版更新。
+
+### 上一版 desktop.10 归档（基线推进与失败卡修复）
+
+**desktop.10**：交付基线推进到上游 `ab3f0585`（当前 `main` 头）。构建、原生 Agent 车道、装机冒烟与渲染验收由 [Windows x64 desktop 工作流](../../actions/workflows/windows.yml) 在 `windows-2022` runner 上执行，本轮 [run 44527172841](https://github.com/hanyingHY/For-OpenDirectore-in-Windows/actions/runs/44527172841) 通过：`package.py` 装配 + 原生 Agent 写入（确定性模型）+ NSIS 编译 + 装机冒烟（`OD_VERIFY_RENDER=1`：静默安装、启动、双语存储、真实 H.264 渲染与 ffprobe 核验），产物 `Windows-installer-x64`（195 MB）与 `Windows-native-evidence`（4.4 MB 装机截图/录像）挂在同一 run；[run 44527172840](https://github.com/hanyingHY/For-OpenDirectore-in-Windows/actions/runs/44527172840)（frontend/backend/canvas/voice/assistant 五车道）与本轮 [离线检查](https://github.com/hanyingHY/For-OpenDirectore-in-Windows/actions/runs/44527669259) 同样通过。安装包在 run 页面的 `Windows-installer-x64` 构件里，原生窗口截图与录像在 `Windows-native-evidence` 里。`sign-update` / `update-handoff` 维持按仓库与 `main` 分支跳过（候选分支不进稳定频道）。本轮修复的时间线「失败卡」问题（用户报告：卡片关不掉）见 [DESKTOP-PARITY-REVIEW.md §0](DESKTOP-PARITY-REVIEW.md)——含网页版 A/B 录像与逐条判据：
 
 | 证据（本分支实录） | 文件 |
 | --- | --- |
@@ -40,7 +54,7 @@
 | --- | --- |
 | 目标 | Windows 11 x64 / Windows 10 22H2 x64，.NET Framework 4.8+ 及 Evergreen WebView2；不含 Windows ARM64、x86、macOS、Linux |
 | 实测系统 | GitHub-hosted **Windows Server 2022 x64**。这是原生 Windows 构建和 GUI 测试，不是 Win10、Win11 各硬件机型的认证 |
-| 打包 | 每用户 NSIS 安装 / 卸载；开始菜单、桌面快捷方式、App Paths；桌面版 `0.1.4-desktop.10`，编译 UI 前额外应用 `patches/canvas-placement.patch` 与 `patches/timeline-output-dismiss.patch`（仅影响自动创建的节点位置与失败卡的出口，不改动存储格式、渲染和模型业务规则） |
+| 打包 | 每用户 NSIS 安装 / 卸载；开始菜单、桌面快捷方式、App Paths；桌面版 `0.1.4-desktop.11`，编译 UI 前按序应用 `patches/` 六张补丁（canvas-placement、bundled-agent、timeline-output-dismiss、agent-gateway-terminal-failure、export-signal-contract、open-elsewhere-autoretry；仅影响节点位置、失败卡出口、导出信号与租约等待呈现，不改动存储格式、渲染和模型业务规则） |
 | 随应用安装 | CPython 3.12.16、上游 Python 依赖、OpenCode 1.19.5 x64 baseline、MinGit 2.56.1、ripgrep 15.1.0、FFmpeg/ffprobe 9.0.2（含 libx264）、编译后的 Web UI |
 | 系统组件 | WebView2 SDK 1.0.2903.40；实际浏览器由系统 Evergreen Runtime 提供并更新。若被移除，请从[微软](https://developer.microsoft.com/microsoft-edge/webview2/)安装 x64 运行时。未捆绑完整浏览器或模型权重 |
 

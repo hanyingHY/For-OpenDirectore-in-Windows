@@ -7,7 +7,7 @@ on:
         type: boolean
         default: true
   push:
-    paths: ['patches/**', 'scripts/package.py', 'verification/placement.test.ts', 'verification/timeline_output_dismiss.mjs', 'verification/timeline_output_reel.mjs', 'verification/reel.mjs', 'verification/browser-engine.mjs', 'verification/frame-connections.patch', 'verification/desktop-error-contract.patch', '.github/workflows/canvas.yml']
+    paths: ['patches/**', 'scripts/package.py', 'verification/placement.test.ts', 'verification/timeline_output_dismiss.mjs', 'verification/export_signal_contract.mjs', 'verification/open_elsewhere_autoretry.mjs', 'verification/desktop11_full_reel.mjs', 'verification/timeline_output_reel.mjs', 'verification/reel.mjs', 'verification/browser-engine.mjs', 'verification/frame-connections.patch', 'verification/desktop-error-contract.patch', 'tests/test_export_signal_contract.py', 'tests/test_transport.py', '.github/workflows/canvas.yml']
 permissions: {contents: read}
 jobs:
   verify:
@@ -30,7 +30,7 @@ jobs:
           ref: ${{ steps.upstream.outputs.sha }}
           path: source
           persist-credentials: false
-      - run: git apply ../patches/canvas-placement.patch ../patches/bundled-agent.patch ../patches/timeline-output-dismiss.patch ../verification/desktop-error-contract.patch && cp ../verification/placement.test.ts ../verification/timeline_output_dismiss.mjs tests/
+      - run: git apply ../patches/canvas-placement.patch ../patches/bundled-agent.patch ../patches/timeline-output-dismiss.patch ../patches/export-signal-contract.patch ../patches/open-elsewhere-autoretry.patch ../verification/desktop-error-contract.patch && cp ../verification/placement.test.ts ../verification/timeline_output_dismiss.mjs ../verification/export_signal_contract.mjs ../verification/open_elsewhere_autoretry.mjs tests/
       - uses: actions/setup-node@v6
         with: {node-version-file: source/.nvmrc}
       - uses: actions/setup-python@v6
@@ -78,6 +78,8 @@ jobs:
           tail -12 "$RUNNER_TEMP/journey.log"
           if [[ "$SUITE" == canvas ]]; then
             node tests/timeline_output_dismiss.mjs
+            node tests/export_signal_contract.mjs
+            node tests/open_elsewhere_autoretry.mjs
             git apply ../verification/frame-connections.patch
             node tests/browser/first_last_frame_connections.mjs
           fi
@@ -104,7 +106,7 @@ jobs:
           ref: ${{ steps.upstream.outputs.sha }}
           path: source
           persist-credentials: false
-      - run: git apply ../patches/canvas-placement.patch ../patches/bundled-agent.patch ../patches/timeline-output-dismiss.patch
+      - run: git apply ../patches/canvas-placement.patch ../patches/bundled-agent.patch ../patches/timeline-output-dismiss.patch ../patches/export-signal-contract.patch ../patches/open-elsewhere-autoretry.patch
       - uses: actions/setup-node@v6
         with: {node-version-file: source/.nvmrc}
       - uses: actions/setup-python@v6
@@ -126,8 +128,14 @@ jobs:
           curl --retry 40 --retry-all-errors --retry-delay 1 -fsS "$CREATION_WEB_URL/" -o /dev/null
           curl --retry 40 --retry-all-errors --retry-delay 1 -fsS -H 'X-OpenDirector-Request: 1' "$CREATION_API_URL/api/health" -o /dev/null
           OD_REEL=after OD_REEL_DIR=.work/reel-after OD_REEL_OUT=.work node ../verification/timeline_output_reel.mjs
+          OD_REEL_DIR=.work/reel-desktop11 OD_REEL_OUT=.work node ../verification/desktop11_full_reel.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: timeline-output-reel
           path: source/.work/timeline-output-after.*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop11-full-journey-reel
+          path: source/.work/desktop11-full-journey.*
           if-no-files-found: error

@@ -118,6 +118,59 @@ Windows 装机侧的同一场景仍由 `verification/render.mjs`（`OD_VERIFY_RE
 
 ---
 
+## 0.1 desktop.11：导出宿主契约 · 租约自愈 · 重试卡出口（本轮修复）
+
+### ① 渲染导出的宿主契约 `data-od-exporting`（PR #397 取「信号」弃「桥」）
+
+**症状**：Host.cs 判断「是否有导出进行中」（退出确认、托盘状态）靠扫描 DOM 里的
+`.cw-render-status progress` 等视图类名——渲染一完成，完成卡上残留的 progress 元素
+（及失败卡的 `[aria-busy]`）会让宿主误判为仍在导出，退出确认被无谓拦截。
+
+**取舍**：PR #397 让 Electron 主进程收 `desktop:exporting` 事件。WebView2 壳没有 IPC 桥，
+但契约本身可借：应用在 `documentElement` 上置位 **`data-od-exporting`**（有引用计数：
+多个时间线并发导出只在全部结束时撤销；**进行中才置位**，完成卡/失败卡不算）。Host.cs
+`InspectAsync` 优先读该属性，旧选择器保留兜底；同时兼容 `window.opendirectorDesktop.
+setExporting` 桥（将来任何壳都可零改动接信号）。三处渲染入口（DirectorStage 预览、
+TimelineEditor 封装导出、TimelineOutput 时间线输出）都挂钩，挂载级 `useExportSignal`，
+组件卸载即释放——没有泄漏的「永久导出中」。
+
+### ② 「他窗占用」自愈等待（open-elsewhere）
+
+**症状**：应用被强杀/崩溃后 60 秒内重开同一项目，后端租约（`LEASE_SECONDS=60`）未过期，
+UI 弹硬错误卡 "This project is open in another window"，只有手动「重新连接」——而用户能做
+的本来就只有等。三个沙箱会话在无关工作中都踩到这个坑。
+
+**修复**：初始化层（`useWorkspaceDocument`）对 `project_open_elsewhere` 单独静默重试
+（3 秒 × 25 次 ≈ 75 秒，覆盖租约剩余寿命），等待态是专门的加载文案：说明在等谁、约多少秒
+后自动进入，并保留「重新连接 / 返回画布首页」两个出口（失败态出口纪律）。租约到期自动进入，
+零点击。重试耗尽（真的有别的活窗口）才落回原错误卡，不掩盖真冲突。租约语义零改动：
+不抢租、不缩租、不碰 sessions 存储。桌面侧配套：`service.py` 的 SessionJournal 在下次
+启动时释放上次崩溃遗留的渲染端会话（绝不碰独立 CLI 租约），`tests/test_transport.py` 7 项。
+
+### ③ 重试输出不再产生关不掉的卡
+
+§0 修复后遗留的一条缝：失败卡上点「重试输出」时焦点仍落在卡片内，若再次失败，
+Escape 一按焦点被吞。本版把重试链与失败卡的出口（Escape / ✕）连通，判据见
+`verification/timeline_output_dismiss.mjs` 的「failed card closable」段。
+
+### 判据与证据
+
+| 判据 | 证据 |
+| --- | --- |
+| 导出信号：渲染进行中置位、结束归零、失败路径零残留 | `verification/export_signal_contract.mjs`（真实渲染 44 采样，8 点命中；桥 `[true,false]`）；全量实录第 6 章 [delivery/desktop11-full-journey.mp4](delivery/desktop11-full-journey.mp4) |
+| 他窗占用：等待态双出口 + 零点击自动进入 | `verification/open_elsewhere_autoretry.mjs`（PASS）；全量实录第 8 章 |
+| 契约静态守卫：Host.cs 读取顺序、双语文案、打包链顺序 | `tests/test_export_signal_contract.py`（5 项） |
+| 全量真机模拟（九章，含双语、上传、导入、真实 H.264） | [delivery/desktop11-full-journey.mp4](delivery/desktop11-full-journey.mp4) |
+
+### 上游缺陷候选（未修，建议提 issue）
+
+**「Fit all」在渲染后状态静默 no-op**：⇧Shift+1 与缩放菜单的 Fit all 在时间线渲染完成后
+（节点被自动移出视口，D7）完全不移动相机（100ms×12 采样几何零变化），无报错；
+`zoomTo(100%)` 正常。路径为 `flow.fitView({nodes: [{id}]})`（@xyflow/react 12.12.0），
+canvas-placement 补丁不涉 `fit()`，疑为 xyflow 的 nodes 过滤语义问题。旅程以「缩放菜单输入 8%」
+的用户路径绕过（`export_signal_contract.mjs` 的 `seeEverything`）。复现探针见
+`.work/upstream/tests/geom_probe.mjs`（临时树，已记档）。
+
 ## 1. 对照方法
 
 - 锁定基线原样跑起来（不套壳、不打补丁）进入画布、创建时间线、触发导出失败；再以同一实例 +

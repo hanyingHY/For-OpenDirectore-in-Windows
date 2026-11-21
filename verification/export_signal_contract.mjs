@@ -13,7 +13,8 @@
  *  - the attribute is set while frames render or the result publishes —
  *    sampled continuously from the page, so a flash would be caught —
  *    and the refcount never drops below zero;
- *  - the host bridge, when present, receives exactly the same transitions;
+ *  - the host bridge, when present, receives per-call state pushes (upstream
+ *    #397 semantics: every start reports true; ends report the shared count);
  *  - the attribute is gone once the render finishes, and a genuine encode
  *    failure clears it too (a failed card is not "exporting").
  *
@@ -75,6 +76,11 @@ try {
     window.__exportingBridge = [];
     window.__exportSamples = [];
     window.opendirectorDesktop = {
+      // Full DesktopBridge shape (upstream 0.1.5 api.ts calls registerSession
+      // and setLocale on the object when present; a partial bridge throws).
+      registerSession() {},
+      setLocale() {},
+      showMore() {},
       setExporting(active) { window.__exportingBridge.push(active); },
     };
     document.addEventListener("DOMContentLoaded", () => {
@@ -204,8 +210,14 @@ try {
   const bridge = state.bridge;
   assert.ok(bridge.includes(true) && bridge[bridge.length - 1] === false,
     "bridge transitions must open and close, got: " + JSON.stringify(bridge));
-  assert.equal(bridge.filter(Boolean).length, bridge.filter((v) => !v).length,
-    "bridge set/unset counts must balance, got: " + JSON.stringify(bridge));
+  // Per-call bridge semantics (upstream #397 desktop.test.ts parity): starts
+  // push true, ends push the shared count state, so a single export with N
+  // bracket sites yields [true × (2N−1), false]. The invariants that matter:
+  // one closing edge, at the very end, with no early close in between.
+  assert.equal(bridge.filter((v) => !v).length, 1,
+    "bridge must close exactly once, got: " + JSON.stringify(bridge));
+  assert.ok(bridge.slice(0, -1).every(Boolean),
+    "bridge closed before the export finished, got: " + JSON.stringify(bridge));
 
   // (3) A genuine encode failure clears the signal too — a failed card is not
   // "exporting". 4096×4096 is rejected by the encoder, same as the dismissal

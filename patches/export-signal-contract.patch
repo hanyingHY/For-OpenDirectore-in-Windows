@@ -108,7 +108,7 @@ index 0000000..357b27b
 + * document element carries `data-od-exporting`; when none is, the attribute is
 + * absent. Hosts read the attribute first and may keep a class-based fallback
 + * for older bundles. Electron-style shells that expose
-+ * `window.opendirectorDesktop.setExporting` also receive the transitions.
++ * `window.opendirectorDesktop.setExporting` receive per-call state pushes.
 + *
 + * The `Window.opendirectorDesktop` declaration is owned by src/desktop.ts
 + * (upstream #397); this module only publishes to it best-effort.

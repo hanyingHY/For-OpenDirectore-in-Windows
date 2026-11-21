@@ -67,7 +67,7 @@ def build():
     # git apply treats paths relative to the extracted upstream tree, even
     # when the build directory lives inside this distribution repository.
     for patch in ('canvas-placement.patch', 'bundled-agent.patch', 'timeline-output-dismiss.patch', 'agent-gateway-terminal-failure.patch',
-                  'export-signal-contract.patch', 'open-elsewhere-autoretry.patch'):
+                  'export-signal-contract.patch', 'open-elsewhere-autoretry.patch', 'agent-run-lease.patch'):
         subprocess.run(['git', '-c', 'core.autocrlf=false', 'apply', '--no-index', str(ROOT/'patches'/patch)],
                        cwd=src, env={**os.environ, 'GIT_CEILING_DIRECTORIES': str(src.parent)}, check=True)
     npm = shutil.which('npm')
@@ -87,12 +87,6 @@ def build():
     shutil.copytree(src / 'packages/core/src/opendirector', core)
     launcher = core/'agent/cli_transport.py'
     original = launcher.read_text(encoding='utf8')
-    old = '(cli_bin / \'opendirector.cmd\').write_text(f\'@"{sys.executable}" -m opendirector.cli %*\\n\')'
-    if original.count(old) != 1: raise ValueError('Unexpected upstream Windows CLI launcher')
-    launcher.write_text(original.replace(old, 'env[\'OD_AGENT_PYTHON\'] = sys.executable\n        (cli_bin / \'opendirector.cmd\').write_text(\'@"%OD_AGENT_PYTHON%" -m opendirector.cli %*\\n\', encoding=\'ascii\')'),encoding='utf8')
-    old = '(cli_bin / \'opendirector.cmd\').write_text(f\'@"{sys.executable}" -m opendirector.cli %*\\n\')'
-    if original.count(old) != 1: raise ValueError('Unexpected upstream Windows CLI launcher')
-    launcher.write_text(original.replace(old, 'env[\'OD_AGENT_PYTHON\'] = sys.executable\n        (cli_bin / \'opendirector.cmd\').write_text(\'@"%OD_AGENT_PYTHON%" -m opendirector.cli %*\\n, encoding=\'ascii\')'),encoding='utf8')
     old = "(cli_bin / 'opendirector.cmd').write_text(f'@\"{sys.executable}\" -m opendirector.cli %*\\n')"
     if original.count(old) != 1: raise ValueError('Unexpected upstream Windows CLI launcher')
     launcher.write_text(original.replace(old, "env['OD_AGENT_PYTHON'] = sys.executable\n        (cli_bin / 'opendirector.cmd').write_text('@\"%OD_AGENT_PYTHON%\" -m opendirector.cli %*\\n', encoding='ascii')"),encoding='utf8')

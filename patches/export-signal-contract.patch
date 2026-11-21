@@ -16,6 +16,13 @@
 # Electron-style shells exposing window.opendirectorDesktop.setExporting
 # also observe the transitions (same bridge shape as upstream PR #397).
 #
+# Baseline 0.1.5 unification (desktop.12): upstream #397 shipped its own
+# desktop.ts counter feeding the same bridge. The two counters are merged —
+# desktopExportStarted() now delegates to exportStarted(), so the attribute
+# and the bridge can never disagree. Bridge pushes keep upstream per-call
+# semantics (every start reports true); the attribute stays transition-
+# based. The Window.opendirectorDesktop declaration is owned by desktop.ts.
+#
 # Also folds in the render-error guidance the failure-state inventory
 # asked for: the H.264/AAC encoder errors now tell Windows N/KN users to
 # install the Media Feature Pack (bilingual, kept in the message catalogs
@@ -88,10 +95,10 @@ index 1cf76e7..82b2152 100644
      itemId: string;
 diff --git a/src/canvas/exportSignal.ts b/src/canvas/exportSignal.ts
 new file mode 100644
-index 0000000..f6e4bc3
+index 0000000..357b27b
 --- /dev/null
 +++ b/src/canvas/exportSignal.ts
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,67 @@
 +/** Explicit "an export or render is in flight" signal for the desktop host.
 + *
 + * The Windows host must know when rendering is running (quit confirmation,
@@ -103,24 +110,30 @@ index 0000000..f6e4bc3
 + * for older bundles. Electron-style shells that expose
 + * `window.opendirectorDesktop.setExporting` also receive the transitions.
 + *
++ * The `Window.opendirectorDesktop` declaration is owned by src/desktop.ts
++ * (upstream #397); this module only publishes to it best-effort.
++ *
 + * The signal is refcounted: overlapping exports (several timelines, a media
 + * editor render beside a timeline output) must not clear it early. */
 +import { useEffect } from "react";
 +
 +let inFlight = 0;
 +
-+declare global {
-+  interface Window {
-+    opendirectorDesktop?: { setExporting?(active: boolean): void };
++function publish() {
++  const active = inFlight > 0;
++  // Headless unit tests exercise the bridge without a DOM; the attribute
++  // contract only exists in a browser document.
++  if (typeof document !== "undefined") {
++    if (active) document.documentElement.setAttribute("data-od-exporting", "");
++    else document.documentElement.removeAttribute("data-od-exporting");
 +  }
 +}
 +
-+function publish() {
-+  const active = inFlight > 0;
-+  if (active) document.documentElement.setAttribute("data-od-exporting", "");
-+  else document.documentElement.removeAttribute("data-od-exporting");
++/** Bridge parity (upstream #397): every start reports true and every end
++ * reports the shared counter state. The attribute stays transition-based. */
++function notifyBridge(value: boolean) {
 +  try {
-+    globalThis.window?.opendirectorDesktop?.setExporting?.(active);
++    globalThis.window?.opendirectorDesktop?.setExporting?.(value);
 +  } catch {
 +    /* A host bridge is optional; the attribute is the contract. */
 +  }
@@ -130,12 +143,14 @@ index 0000000..f6e4bc3
 +export function exportStarted(): () => void {
 +  inFlight += 1;
 +  if (inFlight === 1) publish();
++  notifyBridge(true);
 +  let ended = false;
 +  return () => {
 +    if (ended) return;
 +    ended = true;
 +    inFlight -= 1;
 +    if (inFlight === 0) publish();
++    notifyBridge(inFlight > 0);
 +  };
 +}
 +
@@ -151,6 +166,33 @@ index 0000000..f6e4bc3
 +export function exportInFlight(): number {
 +  return inFlight;
 +}
+diff --git a/src/desktop.ts b/src/desktop.ts
+index 5e8471d..d7a97a7 100644
+--- a/src/desktop.ts
++++ b/src/desktop.ts
+@@ -10,15 +10,12 @@ declare global {
+   interface Window { opendirectorDesktop?: DesktopBridge }
+ }
+ 
+-let exportsInProgress = 0;
++// Single refcounter: the data-od-exporting attribute and the bridge are two
++// faces of one export-signal contract (see canvas/exportSignal.ts). Delegating
++// keeps every call site paired on the same counter, so the bridge and the
++// attribute can never disagree.
++import { exportStarted } from "./canvas/exportSignal.ts";
++
+ export function desktopExportStarted(): () => void {
+-  exportsInProgress += 1;
+-  globalThis.window?.opendirectorDesktop?.setExporting(true);
+-  let finished = false;
+-  return () => {
+-    if (finished) return;
+-    finished = true;
+-    exportsInProgress -= 1;
+-    globalThis.window?.opendirectorDesktop?.setExporting(exportsInProgress > 0);
+-  };
++  return exportStarted();
+ }
 diff --git a/src/i18n/messages/en-US/errors.ts b/src/i18n/messages/en-US/errors.ts
 index 7bb1957..dc72cfc 100644
 --- a/src/i18n/messages/en-US/errors.ts

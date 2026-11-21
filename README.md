@@ -48,13 +48,13 @@
 
 ## 桌面版与网页版是什么关系？
 
-固定基线是 [ThinkFlowLab/OpenDirector `d05a56d`](https://github.com/ThinkFlowLab/OpenDirector/tree/d05a56d712349ee7e4c61407cfc2d0258724cefa)（0.1.4）。使用其 `package-lock.json` 构建完整的 React/Vite UI，原样加载其 API、画布、时间线、字幕字体、双语消息、模型配置和 Agent skills。打包时对 Windows CLI 启动脚本、非交互 Git 初始化的标准输入和只读任务计数接入点做适配，不改画布的写入、渲染或模型业务规则。WebView2 提供 Edge 的文件选择、下载、剪贴板和 WebCodecs，不用另一套 UI 模仿原版。
+固定基线是 [ThinkFlowLab/OpenDirector `8584cc9`](https://github.com/ThinkFlowLab/OpenDirector/tree/8584cc96d588a978c60eb5c5f16c182bb3336f20)（0.1.5，含上游官方 Electron 桌面应用 #397 与下载页 #413，我们只消费其共享层）。使用其 `package-lock.json` 构建完整的 React/Vite UI，原样加载其 API、画布、时间线、字幕字体、双语消息、模型配置和 Agent skills。打包时对 Windows CLI 启动脚本、非交互 Git 初始化的标准输入和只读任务计数接入点做适配，不改画布的写入、渲染或模型业务规则。WebView2 提供 Edge 的文件选择、下载、剪贴板和 WebCodecs，不用另一套 UI 模仿原版。
 
 | 项目 | 本次交付 |
 | --- | --- |
 | 目标 | Windows 11 x64 / Windows 10 22H2 x64，.NET Framework 4.8+ 及 Evergreen WebView2；不含 Windows ARM64、x86、macOS、Linux |
 | 实测系统 | GitHub-hosted **Windows Server 2022 x64**。这是原生 Windows 构建和 GUI 测试，不是 Win10、Win11 各硬件机型的认证 |
-| 打包 | 每用户 NSIS 安装 / 卸载；开始菜单、桌面快捷方式、App Paths；桌面版 `0.1.4-desktop.11`，编译 UI 前按序应用 `patches/` 六张补丁（canvas-placement、bundled-agent、timeline-output-dismiss、agent-gateway-terminal-failure、export-signal-contract、open-elsewhere-autoretry；仅影响节点位置、失败卡出口、导出信号与租约等待呈现，不改动存储格式、渲染和模型业务规则） |
+| 打包 | 每用户 NSIS 安装 / 卸载；开始菜单、桌面快捷方式、App Paths；桌面版 `0.1.5-desktop.12`，编译 UI 前按序应用 `patches/` 六张补丁（canvas-placement、bundled-agent、timeline-output-dismiss、agent-gateway-terminal-failure、export-signal-contract、open-elsewhere-autoretry；仅影响节点位置、失败卡出口、导出信号与租约等待呈现，不改动存储格式、渲染和模型业务规则。基线推进 0.1.5 后，open-elsewhere 与 #397 的 Reconnect/Back 出口、unload 释放会话互补共存；导出信号与 #397 的 `setExporting` 桥统一为单一引用计数，属性与桥不再互相打架） |
 | 随应用安装 | CPython 3.12.16、上游 Python 依赖、OpenCode 1.19.5 x64 baseline、MinGit 2.56.1、ripgrep 15.1.0、FFmpeg/ffprobe 9.0.2（含 libx264）、编译后的 Web UI |
 | 系统组件 | WebView2 SDK 1.0.2903.40；实际浏览器由系统 Evergreen Runtime 提供并更新。若被移除，请从[微软](https://developer.microsoft.com/microsoft-edge/webview2/)安装 x64 运行时。未捆绑完整浏览器或模型权重 |
 

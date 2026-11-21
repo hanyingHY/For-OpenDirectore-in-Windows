@@ -1,3 +1,6 @@
+diff --git a/src/canvas/automaticPlacement.ts b/src/canvas/automaticPlacement.ts
+new file mode 100644
+index 0000000..8121b8e
 --- /dev/null
 +++ b/src/canvas/automaticPlacement.ts
 @@ -0,0 +1,46 @@
@@ -47,59 +50,11 @@
 +  }
 +  return additions;
 +}
---- a/src/canvas/workspace/useWorkspaceInteraction.tsx
-+++ b/src/canvas/workspace/useWorkspaceInteraction.tsx
-@@ -2,6 +2,7 @@
- import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
- import { errorMessage } from "../../backend/api.ts";
- 
-+import { placeAutomaticNodes } from "../automaticPlacement.ts";
- import { CanvasContextMenu } from "../CanvasContextMenu";
- import { CanvasIcon } from "../CanvasIcon";
- import { canStartReference, connectedCreationKinds, referenceIssueText, referenceMaterial } from "../connectionPolicy";
-@@ -229,7 +230,7 @@
-       ...extra,
-     });
-     if (kind === "timeline") node.width = 720;
--    const parent = menu?.parentId
-+    const parent = position && menu?.parentId
-       ? current.nodes.find((candidate) => candidate.id === menu.parentId)
-       : undefined;
-     // The dropped endpoint becomes the new node's input/output port.
-@@ -243,6 +244,7 @@
-     );
-     node.position = placed.position;
-     if (placed.parentId) node.parentId = placed.parentId;
-+    if (!position) placeAutomaticNodes(current.nodes, [node]);
-     const commands: CanvasCommand[] = [
-       {
-         type: "add-nodes",
---- a/src/canvas/workspace/useWorkspaceTransfer.ts
-+++ b/src/canvas/workspace/useWorkspaceTransfer.ts
-@@ -1,3 +1,4 @@
-+import { placeAutomaticNodes } from "../automaticPlacement.ts";
- import { useEffect } from "react";
- import { errorMessage } from "../../backend/api.ts";
- 
-@@ -109,6 +110,7 @@
-       { x: where.x - 160, y: where.y - 140 },
-       resourceNodeData(resource),
-     );
-+    placeAutomaticNodes(current.nodes, [node]);
-     const next = applyCommand(current, { type: "add-nodes", nodes: [node] });
-     if (!(await persist(next)))
-       throw new Error(saveError.current || t("canvas.workspace.error.importUnsaved"));
-@@ -788,6 +790,7 @@
-         !historyRef.current.present.nodes.some((n) => n.id === refTarget)
-       )
-         refTarget = null;
-+      if (!point && nodes.length) placeAutomaticNodes(historyRef.current.present.nodes, nodes);
-       if (nodes.length) commands.unshift({ type: "add-nodes", nodes });
-       const linked = refTarget
-         ? referenceEdges(
+diff --git a/src/canvas/subjectLibraryImport.ts b/src/canvas/subjectLibraryImport.ts
+index ed76d7a..e8c183e 100644
 --- a/src/canvas/subjectLibraryImport.ts
 +++ b/src/canvas/subjectLibraryImport.ts
-@@ -6,6 +6,7 @@
+@@ -6,6 +6,7 @@ import {
    type SubjectData,
    type Point,
  } from "./model.ts";
@@ -107,7 +62,7 @@
  import { isNodeLocked, indexNodes } from "./hierarchy.ts";
  import { referenceTypeAllowed } from "./connectionPolicy.ts";
  import { subjectError } from "./dataBoundary.ts";
-@@ -90,7 +91,7 @@
+@@ -90,7 +91,7 @@ export function librarySubjectCommand(
    if (!targetId)
      return {
        type: "add-nodes",
@@ -116,7 +71,7 @@
          const node = createNode(
            "subject",
            {
-@@ -102,7 +103,7 @@
+@@ -102,7 +103,7 @@ export function librarySubjectCommand(
          return measure
            ? { ...node, height: measure(source.subject, node.width) }
            : node;
@@ -125,3 +80,57 @@
      };
    if (sources.length !== 1)
      throw new Error(t("library.subject.singleLibrary"));
+diff --git a/src/canvas/workspace/useWorkspaceInteraction.tsx b/src/canvas/workspace/useWorkspaceInteraction.tsx
+index fb00146..0b67fef 100644
+--- a/src/canvas/workspace/useWorkspaceInteraction.tsx
++++ b/src/canvas/workspace/useWorkspaceInteraction.tsx
+@@ -2,6 +2,7 @@ import { type Connection, type Edge, type NodeChange, type OnConnectEnd } from "
+ import { useCallback, useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
+ import { errorMessage } from "../../backend/api.ts";
+ 
++import { placeAutomaticNodes } from "../automaticPlacement.ts";
+ import { CanvasContextMenu } from "../CanvasContextMenu";
+ import { CanvasIcon } from "../CanvasIcon";
+ import { canStartReference, connectedCreationKinds, referenceIssueText, referenceMaterial } from "../connectionPolicy";
+@@ -229,7 +230,7 @@ export function useWorkspaceInteraction(rt: WorkspaceRuntime) {
+       ...extra,
+     });
+     if (kind === "timeline") node.width = 720;
+-    const parent = menu?.parentId
++    const parent = position && menu?.parentId
+       ? current.nodes.find((candidate) => candidate.id === menu.parentId)
+       : undefined;
+     // The dropped endpoint becomes the new node's input/output port.
+@@ -243,6 +244,7 @@ export function useWorkspaceInteraction(rt: WorkspaceRuntime) {
+     );
+     node.position = placed.position;
+     if (placed.parentId) node.parentId = placed.parentId;
++    if (!position) placeAutomaticNodes(current.nodes, [node]);
+     const commands: CanvasCommand[] = [
+       {
+         type: "add-nodes",
+diff --git a/src/canvas/workspace/useWorkspaceTransfer.ts b/src/canvas/workspace/useWorkspaceTransfer.ts
+index bc5f5e1..dd0e70a 100644
+--- a/src/canvas/workspace/useWorkspaceTransfer.ts
++++ b/src/canvas/workspace/useWorkspaceTransfer.ts
+@@ -1,3 +1,4 @@
++import { placeAutomaticNodes } from "../automaticPlacement.ts";
+ import { useEffect } from "react";
+ import { errorMessage } from "../../backend/api.ts";
+ 
+@@ -110,6 +111,7 @@ export function useWorkspaceTransfer(rt: WorkspaceRuntime) {
+       { x: where.x - 160, y: where.y - 140 },
+       resourceNodeData(resource),
+     );
++    placeAutomaticNodes(current.nodes, [node]);
+     const next = applyCommand(current, { type: "add-nodes", nodes: [node] });
+     if (!(await persist(next)))
+       throw new Error(saveError.current || t("canvas.workspace.error.importUnsaved"));
+@@ -857,6 +859,7 @@ export function useWorkspaceTransfer(rt: WorkspaceRuntime) {
+         !historyRef.current.present.nodes.some((n) => n.id === refTarget)
+       )
+         refTarget = null;
++      if (!point && nodes.length) placeAutomaticNodes(historyRef.current.present.nodes, nodes);
+       if (nodes.length) commands.unshift({ type: "add-nodes", nodes });
+       const linked = refTarget
+         ? referenceEdges(

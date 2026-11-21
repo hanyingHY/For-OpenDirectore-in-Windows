@@ -25,10 +25,10 @@
 # and releases them at next launch, so an app crash + restart opens at
 # once (see tests/test_transport.py).
 diff --git a/src/canvas/workspace/WorkspaceView.tsx b/src/canvas/workspace/WorkspaceView.tsx
-index b835dd7..2651bdc 100644
+index 1866d65..b8a780b 100644
 --- a/src/canvas/workspace/WorkspaceView.tsx
 +++ b/src/canvas/workspace/WorkspaceView.tsx
-@@ -184,6 +184,7 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
+@@ -189,6 +189,7 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
      importInput,
      importLibrarySubjects,
      initializationError,
@@ -36,7 +36,7 @@ index b835dd7..2651bdc 100644
      insertLibraryItems,
      installDocument,
      interacting,
-@@ -2924,6 +2925,19 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
+@@ -2984,6 +2985,19 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
                <button onClick={() => window.location.reload()}>{t("canvas.workspace.loading.reconnect")}</button>
                <a href="/">{t("canvas.workspace.loading.backHome")}</a>
              </div>
@@ -88,7 +88,7 @@ index c4e4828..83ddcab 100644
      projectRenaming: false,
      switching: false,
 diff --git a/src/canvas/workspace/useWorkspaceDocument.ts b/src/canvas/workspace/useWorkspaceDocument.ts
-index f9a8adb..366acc2 100644
+index edb6be8..134d07d 100644
 --- a/src/canvas/workspace/useWorkspaceDocument.ts
 +++ b/src/canvas/workspace/useWorkspaceDocument.ts
 @@ -2,7 +2,7 @@
@@ -108,7 +108,7 @@ index f9a8adb..366acc2 100644
      setInteracting,
      setMeasurements,
      setMenu,
-@@ -474,19 +475,39 @@ export function useWorkspaceDocument(rt: WorkspaceRuntime) {
+@@ -473,19 +474,39 @@ export function useWorkspaceDocument(rt: WorkspaceRuntime) {
  
    useEffect(() => {
      let alive = true;
@@ -151,7 +151,7 @@ index f9a8adb..366acc2 100644
      };
    }, [installDocument, notify]);
 diff --git a/src/i18n/messages/en-US/canvasWorkspace.ts b/src/i18n/messages/en-US/canvasWorkspace.ts
-index f87cfcb..c452822 100644
+index 2b2bafb..e549b85 100644
 --- a/src/i18n/messages/en-US/canvasWorkspace.ts
 +++ b/src/i18n/messages/en-US/canvasWorkspace.ts
 @@ -94,6 +94,8 @@ export const canvasWorkspace = {
@@ -164,7 +164,7 @@ index f87cfcb..c452822 100644
    "canvas.workspace.selection.edgesSelected": {
      one: "Selected {count} connection",
 diff --git a/src/i18n/messages/zh-CN/canvasWorkspace.ts b/src/i18n/messages/zh-CN/canvasWorkspace.ts
-index 3a9dbca..460be9b 100644
+index b56bee8..80c9a8b 100644
 --- a/src/i18n/messages/zh-CN/canvasWorkspace.ts
 +++ b/src/i18n/messages/zh-CN/canvasWorkspace.ts
 @@ -93,6 +93,8 @@ export const canvasWorkspace = {

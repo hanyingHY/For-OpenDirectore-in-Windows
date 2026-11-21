@@ -31,10 +31,10 @@
 ### P0 · 启动（本阶段）
 - [x] 汇整 desktop.11 工作基线（arena/3dd8bd97 超集）至本分支
 - [x] 本计划落盘
-- [ ] **基线差异评估**：ddea4d0 → 0.1.5（8584cc9）逐文件比对 6 张补丁触点，输出《基线推进评估》结论
+- [x] **基线差异评估**：见 [baseline-0.1.5-assessment.md](baseline-0.1.5-assessment.md)（结论：可行，4 文件重排 + 2 补丁语义去重）
 
 ### P1 · 基线推进与补丁去重
-- [ ] 基线推进到 0.1.5，补丁链重排：吸收上游租约释放（unload DELETE）、open-elsewhere 出口等已上游化内容，保留/重写未上游化部分（canvas-placement、timeline-output-dismiss、gateway-terminal、export-signal-contract、open-elsewhere 自愈等待）
+- [x] 基线推进到 0.1.5，补丁链重排：（桌面.12 已完成代码与本地全链验证，Windows 工作流冒烟待跑）吸收上游租约释放（unload DELETE）、open-elsewhere 出口等已上游化内容，保留/重写未上游化部分（canvas-placement、timeline-output-dismiss、gateway-terminal、export-signal-contract、open-elsewhere 自愈等待）
 - [ ] 回归：上游 `npm test` 全绿 + 我方 `tests/` 全绿 + Windows 工作流冒烟
 
 ### P2 · B2 根治：会话/租约所有权（上游 #321）

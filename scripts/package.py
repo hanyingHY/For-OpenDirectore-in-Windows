@@ -12,7 +12,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 WORK = ROOT / '.work'
 APP = WORK / 'app'
-SHA = 'ddea4d053167533c2c523bc9aec7b6afb6143ab2'
+SHA = '8584cc96d588a978c60eb5c5f16c182bb3336f20'
 PY = 'cpython-3.12.16+20261110-x86_64-pc-windows-msvc-install_only_stripped.tar.gz'
 FF = 'ffmpeg-9.0.2-essentials_build'
 WV = '1.0.2903.40'
@@ -87,6 +87,12 @@ def build():
     shutil.copytree(src / 'packages/core/src/opendirector', core)
     launcher = core/'agent/cli_transport.py'
     original = launcher.read_text(encoding='utf8')
+    old = '(cli_bin / \'opendirector.cmd\').write_text(f\'@"{sys.executable}" -m opendirector.cli %*\\n\')'
+    if original.count(old) != 1: raise ValueError('Unexpected upstream Windows CLI launcher')
+    launcher.write_text(original.replace(old, 'env[\'OD_AGENT_PYTHON\'] = sys.executable\n        (cli_bin / \'opendirector.cmd\').write_text(\'@"%OD_AGENT_PYTHON%" -m opendirector.cli %*\\n\', encoding=\'ascii\')'),encoding='utf8')
+    old = '(cli_bin / \'opendirector.cmd\').write_text(f\'@"{sys.executable}" -m opendirector.cli %*\\n\')'
+    if original.count(old) != 1: raise ValueError('Unexpected upstream Windows CLI launcher')
+    launcher.write_text(original.replace(old, 'env[\'OD_AGENT_PYTHON\'] = sys.executable\n        (cli_bin / \'opendirector.cmd\').write_text(\'@"%OD_AGENT_PYTHON%" -m opendirector.cli %*\\n, encoding=\'ascii\')'),encoding='utf8')
     old = "(cli_bin / 'opendirector.cmd').write_text(f'@\"{sys.executable}\" -m opendirector.cli %*\\n')"
     if original.count(old) != 1: raise ValueError('Unexpected upstream Windows CLI launcher')
     launcher.write_text(original.replace(old, "env['OD_AGENT_PYTHON'] = sys.executable\n        (cli_bin / 'opendirector.cmd').write_text('@\"%OD_AGENT_PYTHON%\" -m opendirector.cli %*\\n', encoding='ascii')"),encoding='utf8')
@@ -106,8 +112,8 @@ def build():
         "'git', 'init', '--quiet', '--template=', cwd=work, stdin=asyncio.subprocess.DEVNULL,")
     replace_once(api/'agent.py', '    return router',
         '    router.count_active = lambda: sum(not task.done() for _, task, _ in active.values())\n    return router')
-    replace_once(api/'main.py', '    app.include_router(agent_routes(creation_projects, creation_generation, model_configs, chat_provider))',
-        """    agent = agent_routes(creation_projects, creation_generation, model_configs, chat_provider)
+    replace_once(api/'main.py', '    app.include_router(agent_routes(creation_projects, creation_generation, model_configs, chat_provider, active=active_agents))',
+        """    agent = agent_routes(creation_projects, creation_generation, model_configs, chat_provider, active=active_agents)
     app.include_router(agent)
 
     @app.get('/__desktop/activity', include_in_schema=False)

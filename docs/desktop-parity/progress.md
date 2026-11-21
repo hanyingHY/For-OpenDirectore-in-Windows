@@ -9,6 +9,7 @@
 
 | 编号 | 项目 | 状态 | 证据 / 说明 |
 | --- | --- | --- | --- |
+| desktop.12-1 | 基线推进 0.1.5（8584cc9）+ 补丁链重排/去重 | 已实现，待 Windows CI 复验 | 《基线推进评估》见 baseline-0.1.5-assessment.md。六张补丁重生成：canvas-placement 手工移植 useWorkspaceInteraction 三处；export-signal-contract 与 #397 `desktop.ts` 双计数合并为单一引用计数（属性翻转 + 桥按调用推送，上游 desktop.test.ts 语义保持）；open-elsewhere 与上游 Reconnect/Back 出口、unload 释放互补共存；bundled-agent 判定为 Windows 专属隔离层保留。上游 `npm test` 944/944 全绿、`npm run build`+`check:i18n`（3265 keys）通过、本仓库 23 项 unittest 全绿、package.py 四个集成点逐一验证并编译检查 |
 | desktop.11-1 | 渲染导出宿主契约 `data-od-exporting`（PR #397 取信号弃桥） | 已验证（Linux 真浏览器旅程 + 静态守卫） | `verification/export_signal_contract.mjs` PASS（真实渲染 44 采样 8 点命中、桥 `[true,false]`、失败路径归零）；`tests/test_export_signal_contract.py`；`desktop/Host.cs` 属性优先+旧兜底；全量实录第 6 章 `delivery/desktop11-full-journey.mp4`。Windows runner 复验待下轮 windows.yml |
 | desktop.11-2 | 「他窗占用」自愈等待（open-elsewhere，3s×25 自动重连） | 已验证（Linux 真浏览器旅程） | `verification/open_elsewhere_autoretry.mjs` PASS（等待态「重新连接/返回首页」双出口、零点击自动进入）；`tests/test_transport.py` 7 项（SessionJournal 崩溃释放）；全量实录第 8 章。租约语义零改动 |
 | desktop.11-3 | 重试输出失败卡 Escape 可关（失败态出口纪律收尾） | 已验证 | `verification/timeline_output_dismiss.mjs` PASS（failed card closable） |

@@ -1,0 +1,33 @@
+--- a/tests/browser/first_last_frame_connections.mjs
++++ b/tests/browser/first_last_frame_connections.mjs
+@@ -88,6 +88,7 @@
+       (value) => value.canvasItems.length === index + 1,
+       "image uploaded",
+     );
++    await page.getByText("已保存到本机", { exact: true }).waitFor();
+   }
+   const images = (await snapshot()).canvasItems.map((item) => item.id);
+ 
+@@ -124,17 +125,12 @@
+ 
+   // Lay the nodes out, then drag A → video and B → video on the canvas.
+   const node = (id) => page.locator(`.react-flow__node[data-id="${id}"]`);
+-  const place = async (id, x, y) => {
+-    const box = await node(id).boundingBox();
+-    await page.mouse.move(box.x + box.width / 2, box.y + 12);
+-    await page.mouse.down();
+-    await page.mouse.move(x, y, { steps: 10 });
+-    await page.mouse.up();
+-  };
++  // New automatic positions already have clearance. Fit the visible content,
++  // then exercise actual ports without dragging cards on top of one another.
++  await page.locator(".cw-workspace").focus();
+   await page.keyboard.press("Escape");
+-  await place(images[0], 300, 300);
+-  await place(images[1], 300, 750);
+-  await place(videoId, 1050, 520);
++  await page.keyboard.press("Shift+1");
++  await page.waitForTimeout(450);
+   for (const source of images) {
+     const box = await node(source).boundingBox();
+     await page.mouse.move(box.x + box.width + 7, box.y + box.height / 2);

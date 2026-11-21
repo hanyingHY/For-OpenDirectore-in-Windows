@@ -1,0 +1,192 @@
+# RFC #362 desktop.11 (Windows distribution patch, also valid upstream):
+#
+# A fresh window waits out a dead window's lease instead of stalling on it.
+#
+# Reopening a project within ~60 s of an ungraceful window close (app
+# crash, killed browser tab, VM snapshot) answered with a hard error card:
+# "This project is open in another window", needing a manual reload the
+# user can only answer by waiting anyway. Three sandbox sessions tripped
+# over this while doing unrelated work — it is the top papercut on reopen.
+#
+# The lease holder is usually already gone; the lease just has not expired
+# yet. The workspace init now retries quietly every 3 s for up to ~75 s
+# when, and only when, the refusal is project_open_elsewhere on a fresh
+# window (reloaded tabs keep their own existing retry in creationClient;
+# storage_busy keeps its backoff; every other error still fails at once).
+# While waiting, the loading screen says what is happening with a countdown
+# and keeps Reconnect / Back to canvas home as explicit exits — the
+# failure-state rule: every in-progress state has a way out. If the lease
+# really belongs to a live window, retries exhaust and the original error
+# card shows, so a genuine conflict is never masked.
+#
+# Lease semantics are unchanged: no takeover, no shortened lease, no
+# change to sessions storage. This is initialization retry + presentation.
+# The desktop side complements it: service.py journals renderer sessions
+# and releases them at next launch, so an app crash + restart opens at
+# once (see tests/test_transport.py).
+diff --git a/src/canvas/workspace/WorkspaceView.tsx b/src/canvas/workspace/WorkspaceView.tsx
+index 1866d65..b8a780b 100644
+--- a/src/canvas/workspace/WorkspaceView.tsx
++++ b/src/canvas/workspace/WorkspaceView.tsx
+@@ -189,6 +189,7 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
+     importInput,
+     importLibrarySubjects,
+     initializationError,
++    openElsewhereWait,
+     insertLibraryItems,
+     installDocument,
+     interacting,
+@@ -2984,6 +2985,19 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
+               <button onClick={() => window.location.reload()}>{t("canvas.workspace.loading.reconnect")}</button>
+               <a href="/">{t("canvas.workspace.loading.backHome")}</a>
+             </div>
++          ) : openElsewhereWait > 0 ? (
++            <div className="canvas-loading-message canvas-loading-waiting">
++              <span className="canvas-loading-spinner" aria-hidden="true" />
++              <p>
++                {t("canvas.workspace.loading.openElsewhere", {
++                  seconds: openElsewhereWait,
++                })}
++              </p>
++              <button onClick={() => window.location.reload()}>
++                {t("canvas.workspace.loading.reconnect")}
++              </button>
++              <a href="/">{t("canvas.workspace.loading.backHome")}</a>
++            </div>
+           ) : (
+             <span className="canvas-loading-message">
+               <span className="canvas-loading-spinner" aria-hidden="true" />
+diff --git a/src/canvas/workspace/state.ts b/src/canvas/workspace/state.ts
+index c4e4828..83ddcab 100644
+--- a/src/canvas/workspace/state.ts
++++ b/src/canvas/workspace/state.ts
+@@ -84,6 +84,10 @@ export type WorkspaceState = {
+   ready: boolean;
+   pageVisible: boolean;
+   initializationError: string;
++  /** Seconds left in the wait-out retry countdown for a lease held by a window
++   * that may have closed without releasing it (`project_open_elsewhere`). 0
++   * means no wait in progress. */
++  openElsewhereWait: number;
+   editProjectNameId: string | null;
+   projectRenaming: boolean;
+   switching: boolean;
+@@ -153,6 +157,7 @@ const workspaceKeys = [
+   "ready",
+   "pageVisible",
+   "initializationError",
++  "openElsewhereWait",
+   "editProjectNameId",
+   "projectRenaming",
+   "switching",
+@@ -213,6 +218,7 @@ export function createWorkspaceState(): WorkspaceState {
+     ready: false,
+     pageVisible: typeof document === "undefined" ? true : !document.hidden,
+     initializationError: "",
++    openElsewhereWait: 0,
+     editProjectNameId: null,
+     projectRenaming: false,
+     switching: false,
+diff --git a/src/canvas/workspace/useWorkspaceDocument.ts b/src/canvas/workspace/useWorkspaceDocument.ts
+index edb6be8..134d07d 100644
+--- a/src/canvas/workspace/useWorkspaceDocument.ts
++++ b/src/canvas/workspace/useWorkspaceDocument.ts
+@@ -2,7 +2,7 @@
+ import { pinnedReferenceAssets } from "../pinnedReferenceAssets.ts";
+ import { SaveQueue } from "../saveQueue.ts";
+ import { useCallback, useEffect, useRef } from "react";
+-import { errorMessage } from "../../backend/api.ts";
++import { errorMessage, ApiError } from "../../backend/api.ts";
+ import { creationClient, CreationCommandError, itemSpec } from "../../backend/creationClient.ts";
+ import { fingerprint } from "../../backend/generation.ts";
+ 
+@@ -59,6 +59,7 @@ export function useWorkspaceDocument(rt: WorkspaceRuntime) {
+     setHistory,
+     setHistoryReplaying,
+     setInitializationError,
++    setOpenElsewhereWait,
+     setInteracting,
+     setMeasurements,
+     setMenu,
+@@ -473,19 +474,39 @@ export function useWorkspaceDocument(rt: WorkspaceRuntime) {
+ 
+   useEffect(() => {
+     let alive = true;
+-    const init = async () => {
++    let timer: number | undefined;
++    // A window closed without releasing its lease holds the project "open
++    // elsewhere" until the lease expires (up to ~60 s). A fresh window that
++    // knows it is not a duplicate waits that out with quiet retries and a
++    // countdown instead of demanding a manual reload the user can only answer
++    // by waiting anyway. Anything else fails to the error card at once.
++    const OPEN_ELSEWHERE_RETRIES = 25;
++    const init = async (attempt = 0) => {
+       try {
+         const document = await initializeWorkspace();
+         if (!alive) return;
+         installDocument(document);
++        setOpenElsewhereWait(0);
+         setReady(true);
+       } catch (error) {
+-        if (alive) setInitializationError(errorMessage(error));
++        if (!alive) return;
++        if (
++          error instanceof ApiError &&
++          error.code === "project_open_elsewhere" &&
++          attempt < OPEN_ELSEWHERE_RETRIES
++        ) {
++          setOpenElsewhereWait((OPEN_ELSEWHERE_RETRIES - attempt) * 3);
++          timer = window.setTimeout(() => void init(attempt + 1), 3000);
++          return;
++        }
++        setOpenElsewhereWait(0);
++        setInitializationError(errorMessage(error));
+       }
+     };
+     void init();
+     return () => {
+       alive = false;
++      if (timer !== undefined) window.clearTimeout(timer);
+       importAbort.current?.abort();
+     };
+   }, [installDocument, notify]);
+diff --git a/src/i18n/messages/en-US/canvasWorkspace.ts b/src/i18n/messages/en-US/canvasWorkspace.ts
+index 2b2bafb..e549b85 100644
+--- a/src/i18n/messages/en-US/canvasWorkspace.ts
++++ b/src/i18n/messages/en-US/canvasWorkspace.ts
+@@ -94,6 +94,8 @@ export const canvasWorkspace = {
+   "canvas.workspace.loading.switching": "Switching canvas…",
+   "canvas.workspace.loading.reconnect": "Reconnect",
+   "canvas.workspace.loading.backHome": "Back to canvas home",
++  "canvas.workspace.loading.openElsewhere":
++    "This project is open in another window. If that window has closed, the canvas opens automatically in about {seconds} seconds; you can also retry now.",
+ 
+   "canvas.workspace.selection.edgesSelected": {
+     one: "Selected {count} connection",
+diff --git a/src/i18n/messages/zh-CN/canvasWorkspace.ts b/src/i18n/messages/zh-CN/canvasWorkspace.ts
+index b56bee8..80c9a8b 100644
+--- a/src/i18n/messages/zh-CN/canvasWorkspace.ts
++++ b/src/i18n/messages/zh-CN/canvasWorkspace.ts
+@@ -93,6 +93,8 @@ export const canvasWorkspace = {
+   "canvas.workspace.loading.switching": "正在切换画布…",
+   "canvas.workspace.loading.reconnect": "重新连接",
+   "canvas.workspace.loading.backHome": "返回画布首页",
++  "canvas.workspace.loading.openElsewhere":
++    "该项目正在其他窗口中打开。若其他窗口已关闭，约 {seconds} 秒后会自动进入；也可以立即重试。",
+ 
+   "canvas.workspace.selection.edgesSelected": {
+     one: "已选 {count} 条连线",
+diff --git a/src/styles/base.css b/src/styles/base.css
+index 217adcc..bba1d34 100644
+--- a/src/styles/base.css
++++ b/src/styles/base.css
+@@ -92,6 +92,9 @@ code {
+ }
+ 
+ .canvas-loading-message { display: inline-flex; align-items: center; gap: 9px; }
++.canvas-loading-waiting { flex-direction: column; text-align: center; max-width: 460px; }
++.canvas-loading-waiting p { margin: 8px 0 2px; line-height: 1.7; }
++.canvas-loading-waiting button, .canvas-loading-waiting a { margin-top: 8px; }
+ .canvas-loading-spinner { box-sizing: border-box; width: 15px; height: 15px; flex: 0 0 15px; border: 1.5px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: canvas-loading-spin .8s linear infinite; }
+ @keyframes canvas-loading-spin { to { transform: rotate(360deg); } }
+ @media (prefers-reduced-motion: reduce) { .canvas-loading-spinner { animation: none; } }

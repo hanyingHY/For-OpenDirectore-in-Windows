@@ -1,0 +1,136 @@
+diff --git a/src/canvas/automaticPlacement.ts b/src/canvas/automaticPlacement.ts
+new file mode 100644
+index 0000000..8121b8e
+--- /dev/null
++++ b/src/canvas/automaticPlacement.ts
+@@ -0,0 +1,46 @@
++import type { CanvasNode, Point, Rect } from "./model.ts";
++import { absolutePositionFromIndex } from "./geometry.ts";
++import { indexNodes } from "./hierarchy.ts";
++
++// Find the ends of the connected run of forbidden positions containing p.
++// Open endpoints are legal: exactly gap units of clearance is enough.
++function exits(p: number, intervals: [number, number][]): number[] {
++  intervals.sort((a, b) => a[0] - b[0]);
++  let lo = Infinity, hi = -Infinity;
++  for (const [a, b] of intervals) {
++    if (a >= hi) {
++      if (lo < p && p < hi) return [hi, lo];
++      lo = a; hi = b;
++    } else hi = Math.max(hi, b);
++  }
++  return lo < p && p < hi ? [hi, lo] : [p];
++}
++
++/** Place automatic additions only. Positions are top-left document coordinates,
++ * independent of CSS transforms, monitor DPI, camera zoom and animation.
++ * Try the nearest clear position along four axes; no arbitrary search radius.
++ * Keep the original position if clear. Never move an existing node. */
++export function freePosition(preferred: Rect, occupied: readonly Rect[], gap = 64): Point {
++  const {x, y, width, height} = preferred;
++  const xs: [number, number][] = [], ys: [number, number][] = [];
++  for (const r of occupied) {
++    const left = r.x - width - gap, right = r.x + r.width + gap;
++    const top = r.y - height - gap, bottom = r.y + r.height + gap;
++    if (top < y && y < bottom) xs.push([left, right]);
++    if (left < x && x < right) ys.push([top, bottom]);
++  }
++  const candidates = [...exits(x, xs).map(nx => ({x: nx, y})),
++                      ...exits(y, ys).map(ny => ({x, y: ny}))];
++  const distance = (p: Point) => Math.abs(p.x - x) + Math.abs(p.y - y);
++  return candidates.reduce((best, p) => distance(p) < distance(best) ? p : best);
++}
++
++export function placeAutomaticNodes(existing: readonly CanvasNode[], additions: CanvasNode[]) {
++  const byId = indexNodes(existing);
++  const occupied = existing.map(n => ({...absolutePositionFromIndex(n, byId), width:n.width, height:n.height}));
++  for (const n of additions) {
++    n.position = freePosition({...n.position, width:n.width, height:n.height}, occupied);
++    occupied.push({...n.position, width:n.width, height:n.height});
++  }
++  return additions;
++}
+diff --git a/src/canvas/subjectLibraryImport.ts b/src/canvas/subjectLibraryImport.ts
+index ed76d7a..e8c183e 100644
+--- a/src/canvas/subjectLibraryImport.ts
++++ b/src/canvas/subjectLibraryImport.ts
+@@ -6,6 +6,7 @@ import {
+   type SubjectData,
+   type Point,
+ } from "./model.ts";
++import { placeAutomaticNodes } from "./automaticPlacement.ts";
+ import { isNodeLocked, indexNodes } from "./hierarchy.ts";
+ import { referenceTypeAllowed } from "./connectionPolicy.ts";
+ import { subjectError } from "./dataBoundary.ts";
+@@ -90,7 +91,7 @@ export function librarySubjectCommand(
+   if (!targetId)
+     return {
+       type: "add-nodes",
+-      nodes: sources.map((source, index) => {
++      nodes: placeAutomaticNodes(document.nodes, sources.map((source, index) => {
+         const node = createNode(
+           "subject",
+           {
+@@ -102,7 +103,7 @@ export function librarySubjectCommand(
+         return measure
+           ? { ...node, height: measure(source.subject, node.width) }
+           : node;
+-      }),
++      })),
+     };
+   if (sources.length !== 1)
+     throw new Error(t("library.subject.singleLibrary"));
+diff --git a/src/canvas/workspace/useWorkspaceInteraction.tsx b/src/canvas/workspace/useWorkspaceInteraction.tsx
+index fb00146..0b67fef 100644
+--- a/src/canvas/workspace/useWorkspaceInteraction.tsx
++++ b/src/canvas/workspace/useWorkspaceInteraction.tsx
+@@ -2,6 +2,7 @@ import { type Connection, type Edge, type NodeChange, type OnConnectEnd } from "
+ import { useCallback, useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
+ import { errorMessage } from "../../backend/api.ts";
+ 
++import { placeAutomaticNodes } from "../automaticPlacement.ts";
+ import { CanvasContextMenu } from "../CanvasContextMenu";
+ import { CanvasIcon } from "../CanvasIcon";
+ import { canStartReference, connectedCreationKinds, referenceIssueText, referenceMaterial } from "../connectionPolicy";
+@@ -229,7 +230,7 @@ export function useWorkspaceInteraction(rt: WorkspaceRuntime) {
+       ...extra,
+     });
+     if (kind === "timeline") node.width = 720;
+-    const parent = menu?.parentId
++    const parent = position && menu?.parentId
+       ? current.nodes.find((candidate) => candidate.id === menu.parentId)
+       : undefined;
+     // The dropped endpoint becomes the new node's input/output port.
+@@ -243,6 +244,7 @@ export function useWorkspaceInteraction(rt: WorkspaceRuntime) {
+     );
+     node.position = placed.position;
+     if (placed.parentId) node.parentId = placed.parentId;
++    if (!position) placeAutomaticNodes(current.nodes, [node]);
+     const commands: CanvasCommand[] = [
+       {
+         type: "add-nodes",
+diff --git a/src/canvas/workspace/useWorkspaceTransfer.ts b/src/canvas/workspace/useWorkspaceTransfer.ts
+index bc5f5e1..dd0e70a 100644
+--- a/src/canvas/workspace/useWorkspaceTransfer.ts
++++ b/src/canvas/workspace/useWorkspaceTransfer.ts
+@@ -1,3 +1,4 @@
++import { placeAutomaticNodes } from "../automaticPlacement.ts";
+ import { useEffect } from "react";
+ import { errorMessage } from "../../backend/api.ts";
+ 
+@@ -110,6 +111,7 @@ export function useWorkspaceTransfer(rt: WorkspaceRuntime) {
+       { x: where.x - 160, y: where.y - 140 },
+       resourceNodeData(resource),
+     );
++    placeAutomaticNodes(current.nodes, [node]);
+     const next = applyCommand(current, { type: "add-nodes", nodes: [node] });
+     if (!(await persist(next)))
+       throw new Error(saveError.current || t("canvas.workspace.error.importUnsaved"));
+@@ -857,6 +859,7 @@ export function useWorkspaceTransfer(rt: WorkspaceRuntime) {
+         !historyRef.current.present.nodes.some((n) => n.id === refTarget)
+       )
+         refTarget = null;
++      if (!point && nodes.length) placeAutomaticNodes(historyRef.current.present.nodes, nodes);
+       if (nodes.length) commands.unshift({ type: "add-nodes", nodes });
+       const linked = refTarget
+         ? referenceEdges(

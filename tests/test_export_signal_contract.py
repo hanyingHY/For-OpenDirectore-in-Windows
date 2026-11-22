@@ -93,6 +93,7 @@ class ExportSignalContractTest(unittest.TestCase):
                 "agent-gateway-terminal-failure.patch",
                 "export-signal-contract.patch",
                 "open-elsewhere-autoretry.patch",
+                "agent-run-lease.patch",
             ],
             "the patch chain order is part of the contract",
         )

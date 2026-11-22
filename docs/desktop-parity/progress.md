@@ -58,3 +58,21 @@
 - 录屏修复（`verification/reel.mjs`）：浏览器内编码按挂钟计时，28 秒的录像被拉长到 73 秒，且突发帧被补到 90 ms；现在有 ffmpeg 时按真实帧间隔编码（沙箱），无 ffmpeg 时仍走浏览器编码（Windows 默认）。
 - 演示视频：`delivery/desktop13-agent-lease.mp4`（已入库，SHA256SUMS 已登记）。
 - 沙箱闸门：隔离车道 25 项中，`large video import`、`timeline node output`、`reference reconnect`、`local output delivery`、`structured editors` 在基线树上同样失败（沙箱环境问题，非 B2 引入）。`canvas text Markdown` 在修复树上独立运行两次均通过，车道内的失败判定为偶发。`timeline workflow` 需使用虚拟环境的 Python 才能通过。
+
+## desktop.14 · 第二轮执行（2026-11-22，分支 arena/1d7b4478）
+
+依据 [plan-2026-11-22.md](plan-2026-11-22.md)。用户已确认：起点 dd80424c、简洁模式默认「系统预设 + 可改抽屉」、先发 desktop.14 草稿。
+
+| 编号 | 项目 | 状态 | 证据 / 说明 |
+| --- | --- | --- | --- |
+| A-1a | 强杀后租约在重启时释放（SessionJournal，真实 `desktop/service.py`） | 已验证（服务级集成） | `tests/test_desktop_crash_recovery.py`：子进程启动真实服务，桌面 Host/Origin/令牌头访问；第一会话占用时第二会话被拒（负对照）；SIGKILL → 重启 → 第二会话直接打开（200）；journal 不再含旧会话。 |
+| A-1b | 强杀后回合显示「回复已中断」（UI） | **未验证，发现缺口** | 沙箱浏览器旅程（`creation_server.py` 夹具）中，强杀后重启的是夹具进程，它不执行 SessionJournal，因此工程仍显示「其他窗口占用，约 72 秒自动进入」。这是夹具与桌面路径的差异，不是桌面端缺陷；但它说明 UI 级旅程必须跑在 desktop service 上（需要桌面来源头的测试通道），此项留待下一步。前端的 `restoreConversation` 已把无活动回合的 streaming 还原为 interrupted，待 UI 旅程确认。 |
+| — | 静态守卫修正 | 已修复 | `tests/test_export_signal_contract.py` 的补丁链期望补上 B2 的 `agent-run-lease.patch`（B2 提交时遗漏，导致 24 项中 1 项红）。`.github/workflows/canvas.yml` 两处 `git apply` 补上 `agent-gateway-terminal-failure.patch` 与 `agent-run-lease.patch`，与 `scripts/package.py` 链一致。 |
+
+沙箱复验（Linux，上游 8584cc9 + 七张补丁按 package.py 顺序应用）：
+- `open_elsewhere_autoretry.mjs` PASS（零点击自动进入）
+- `agent_lease_switch.mjs` PASS（写入 `applied`，回复 `complete`，landed）
+- `agent_lease_second_window.mjs` PASS（窗口 2 等待态后自动进入，写入 `applied`）
+- `python -m unittest discover -s tests`：24 项全绿。
+
+环境要点（沙箱）：Chromium 131 取自 `@sparticuz/chromium` 包（libnss 等依赖由其 `al2`/`al2023` 包解出，`LD_LIBRARY_PATH` 仅给浏览器，不能全局设置，否则系统 sqlite3 失败）；ffmpeg 9.0.2 取自 PyPI `imageio-ffmpeg`，ffprobe 取自 npm `@ffprobe-installer/ffprobe`；Playwright 驱动为 `playwright-core@1.58.2`（与 canvas.yml 同版本）。夹具必须用固定 `--root` 才能跨重启保留数据。

@@ -31,6 +31,7 @@ import { createServer } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { spawnSync } from "node:child_process";
 
 const MIN_HOLD_MS = 90;
 const MAX_HOLD_MS = 900;
@@ -160,9 +161,12 @@ export async function openReel(page, options = {}) {
     const at = Date.now() - startedAt;
     const last = items.at(-1);
     if (last && last.hash === hash) return; // An idle window repaints; it is not new information.
-    if (last) last.holdMs = Math.min(Math.max(at - last.at, MIN_HOLD_MS), maxHoldMs);
+    if (last) {
+      last.rawMs = at - last.at;
+      last.holdMs = Math.min(Math.max(last.rawMs, MIN_HOLD_MS), maxHoldMs);
+    }
     const name = `f${String(items.length).padStart(4, "0")}.jpg`;
-    items.push({ at, hash, file: name, holdMs: MIN_HOLD_MS });
+    items.push({ at, hash, file: name, holdMs: MIN_HOLD_MS, rawMs: MIN_HOLD_MS });
     void writeFile(join(dir, name), bytes);
   });
   await cdp.send("Page.startScreencast", {
@@ -178,7 +182,10 @@ export async function openReel(page, options = {}) {
       await cdp.send("Page.stopScreencast").catch(() => {});
       await page.evaluate(() => document.getElementById("od-reel-caption")?.remove()).catch(() => {});
       const last = items.at(-1);
-      if (last) last.holdMs = Math.min(Math.max(Date.now() - last.at, MIN_HOLD_MS), maxHoldMs);
+      if (last) {
+        last.rawMs = Date.now() - last.at;
+        last.holdMs = Math.min(Math.max(last.rawMs, MIN_HOLD_MS), maxHoldMs);
+      }
       const manifest = { width: size.width, height: size.height, items: items.map(({ at, hash, ...keep }) => keep) };
       await writeFile(join(dir, "manifest.json"), JSON.stringify(manifest));
       return { ...manifest, ms: Date.now() - startedAt, dir };
@@ -194,6 +201,14 @@ export async function encodeReel(browser, dir, outPath, options = {}) {
   const manifest = JSON.parse(await readFile(join(dir, "manifest.json"), "utf8"));
   if (!manifest.items?.length) throw new Error(`reel in ${dir} captured no frames`);
   if (!existsSync(join(dir, manifest.items[0].file))) throw new Error("reel frames are missing");
+  // The browser encoder paces frames with timers, so its duration follows encode time, not the
+  // window's timeline (a 28 s recording came out 73 s). When ffmpeg is installed, encode from the
+  // captured hold times instead: same frames, true pacing. The browser path stays the default on
+  // machines without ffmpeg (Windows), which is what the reel is meant to prove.
+  const encoder = options.encoder ?? process.env.OD_REEL_ENCODER ?? "auto";
+  const ffmpeg = encoder === "browser" ? null : findFfmpeg();
+  if (encoder === "ffmpeg" && !ffmpeg) throw new Error("OD_REEL_ENCODER=ffmpeg but ffmpeg is not on PATH");
+  if (ffmpeg) return encodeWithFfmpeg(ffmpeg, dir, manifest, outPath);
   const { origin, close } = await serve(dir);
   const context = await browser.newContext({ viewport: { width: 640, height: 360 } });
   try {
@@ -220,4 +235,35 @@ export async function encodeReel(browser, dir, outPath, options = {}) {
     await context.close().catch(() => {});
     await close();
   }
+}
+
+function findFfmpeg() {
+  const probe = spawnSync("ffmpeg", ["-hide_banner", "-version"], { encoding: "utf8" });
+  return probe.status === 0 ? "ffmpeg" : null;
+}
+
+/** Concat-demuxer list: each frame is shown for its own hold time, the last one for its own too. */
+async function encodeWithFfmpeg(ffmpeg, dir, manifest, outPath) {
+  const width = manifest.width - (manifest.width % 2), height = manifest.height - (manifest.height % 2);
+  const quote = (value) => `'${value.replace(/'/g, "'\\''")}'`;
+  const lines = [];
+  for (const item of manifest.items) {
+    // Real intervals (floored at one 30 fps frame): the padded holdMs would stretch bursts of frames.
+    lines.push(`file ${quote(join(dir, item.file))}`, `duration ${(Math.max(item.rawMs ?? item.holdMs, 33) / 1000).toFixed(3)}`);
+  }
+  lines.push(`file ${quote(join(dir, manifest.items.at(-1).file))}`);
+  const list = join(dir, "frames.txt");
+  await writeFile(list, lines.join("\n") + "\n");
+  const run = spawnSync(ffmpeg, [
+    "-hide_banner", "-loglevel", "error", "-y",
+    "-f", "concat", "-safe", "0", "-i", list,
+    "-vf", `scale=${width}:${height}:flags=lanczos,format=yuv420p`,
+    "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-r", "30",
+    "-movflags", "+faststart", outPath,
+  ], { encoding: "utf8" });
+  if (run.status !== 0) throw new Error(`ffmpeg encoding failed: ${run.stderr}`);
+  const bytes = (await readFile(outPath)).length;
+  const ms = Math.round(manifest.items.reduce((t, i) => t + (i.rawMs ?? i.holdMs), 0));
+  return { mime: "video/mp4;codecs=avc1 (ffmpeg libx264)", mp4: true, bytes, frames: manifest.items.length,
+           width, height, outPath, ms };
 }

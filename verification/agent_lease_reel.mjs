@@ -83,9 +83,10 @@ try {
     await page.waitForTimeout(ms);
   };
 
-  await note("desktop.13 · B2：Agent 回复与窗口的项目切换解耦", 1800);
+  // The caption overlay lives in the page: draw captions only after navigation, or the first one is wiped.
   await page.goto(base);
   await page.getByText("已保存到本机", { exact: true }).waitFor({ state: "attached" });
+  await note("desktop.13 · B2：Agent 回复与窗口的项目切换解耦", 1800);
   const panel = page.getByRole("complementary", { name: "AI 对话", exact: true });
   const editor = panel.getByRole("textbox", { name: "消息内容", exact: true });
   const show = async () => {

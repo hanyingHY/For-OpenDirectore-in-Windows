@@ -38,9 +38,15 @@
 - [ ] 回归：上游 `npm test` 全绿 + 我方 `tests/` 全绿 + Windows 工作流冒烟
 
 ### P2 · B2 根治：会话/租约所有权（上游 #321）
-- [ ] Agent 运行持有独立租约（续期、结束释放、保留窗口归属），修复「切换项目后 Agent 写入失败」
-- [ ] 页面卸载释放会话 + 崩溃恢复（SessionJournal）+ 多窗口冲突 UX 与 desktop.11 自愈等待对齐
-- [ ] 交付：真机全量模拟 mp4（含切换项目 → Agent 写入 → 强杀恢复旅程）
+- [x] Agent 运行持有独立租约（`lease_run` 写 `sessions.owner`、每 15 s 续期、回合结束在 `finally` 与完成回调中释放）；写入、停止、事件读取不再依赖窗口租约。提交 `a104763`，补丁 `patches/agent-run-lease.patch`。
+- [x] 运行中的回合阻止重命名、删除（进入回收站）与清理，与一个打开的窗口一致（测试 `test_live_run_holds_rename_trash_and_cleanup_until_it_ends`）。
+- [x] 多窗口冲突 UX：窗口 2 打开运行中的工程时显示「其他窗口」等待态，不进入画布；窗口 1 回复完成且写入落地；窗口 1 关闭后窗口 2 自行进入（`verification/agent_lease_second_window.mjs`，结果 `entered`，无点击）。
+- [x] 页面卸载释放会话：上游已有 `pagehide` → `DELETE /api/creation/sessions/{id}`，第二窗口旅程依赖它。
+- [x] **60 s 过期问题的答案**：运行中的回合每 15 s 续期，过期本身不会切断回复（`test_run_lease_outlives_the_window_lease_and_is_released_at_the_end`，0.5 s 租约下通过）。仅当进程被杀、续期停止时租约才会在 60 s 后失效，此时由 desktop.11 的等待自愈接管。
+- [x] 交付：`delivery/desktop13-agent-lease.mp4`（28 s，切换项目 → Agent 写入 → 回到 A，写入状态 `applied`）。
+- [ ] 崩溃恢复（SessionJournal）：进程被强杀后，回合在对话中的状态应显示「中断」而不是「思考中」，且工程在过期后可再次打开。尚未验证。
+- [ ] 交付：强杀恢复旅程的真机全量 mp4（需在崩溃恢复完成后录制）。
+- [ ] 回归：上游全量 pytest 与我方 `tests/` 全绿。当前：失败集合与基线完全相同（21 项，均为本机缺 CLI 运行时等环境原因），新增测试全部通过。
 
 ### P3 · A1/A2/C1 简洁模式与双维切换
 - [ ] 简洁模式 MVP（输入一句话 + 参考图 → 预设出片 → 结果卡 → 转入进阶）

@@ -49,3 +49,12 @@
 - A1 方案写入 `a1-dual-mode-spec.md`，包括用户确认的两种模式、切换方式、依赖与待决问题。
 - 未完成项：B2、A1–A3、B6/B7、C5、C11、D2/D3，以及备选清单中其余约 50 项。
 - 未完成的验证：B1 在 Windows 真机上的 UI 演示；C9 的真机验证；各项改进的真机 mp4。
+
+## desktop.13 · B2 进展（本轮）
+
+- 代码与测试：`a104763`（运行租约、补丁、6 个 pytest 用例）。从 `/tmp` 对「基线 + 六个补丁 + B2」复验：6/6 租约测试通过，42/42 助手与创建 API 测试通过，清单检查退出 0。
+- 上游全量 pytest（已装入 ffmpeg 工具链）：21 失败、2848 通过，失败集合与基线逐项一致。
+- 旅程：`agent_lease_switch.mjs`（切换项目，写入落地）、`agent_lease_second_window.mjs`（多窗口冲突 → 自愈进入）、`agent_lease_reel.mjs`（录屏）。
+- 录屏修复（`verification/reel.mjs`）：浏览器内编码按挂钟计时，28 秒的录像被拉长到 73 秒，且突发帧被补到 90 ms；现在有 ffmpeg 时按真实帧间隔编码（沙箱），无 ffmpeg 时仍走浏览器编码（Windows 默认）。
+- 演示视频：`delivery/desktop13-agent-lease.mp4`（已入库，SHA256SUMS 已登记）。
+- 沙箱闸门：隔离车道 25 项中，`large video import`、`timeline node output`、`reference reconnect`、`local output delivery`、`structured editors` 在基线树上同样失败（沙箱环境问题，非 B2 引入）。`canvas text Markdown` 在修复树上独立运行两次均通过，车道内的失败判定为偶发。`timeline workflow` 需使用虚拟环境的 Python 才能通过。

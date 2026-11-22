@@ -1,0 +1,30 @@
+name: Desktop regression checks
+on: [push, pull_request]
+permissions: {contents: read}
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.12'}
+      - uses: actions/setup-node@v6
+        with: {node-version: '24'}
+      - name: Check transport, update verification and failure paths
+        run: |
+          python -m compileall -q desktop scripts verification
+          python -m unittest discover -s tests -v
+      - name: Check download availability and browser drivers
+        run: |
+          for script in scripts/*.mjs verification/*.mjs; do node --check "$script"; done
+          node verification/landing.mjs
+      - name: Parse acceptance scripts without running installation
+        shell: pwsh
+        run: |
+          foreach ($file in (Get-ChildItem scripts,verification -Filter '*.ps1')) {
+            $problems=$null; $tokens=$null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName,[ref]$tokens,[ref]$problems)
+            if ($problems) { throw ($problems | Out-String) }
+          }

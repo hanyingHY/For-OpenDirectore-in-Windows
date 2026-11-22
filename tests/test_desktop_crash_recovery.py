@@ -24,6 +24,11 @@ sys.path.insert(0, str(ROOT))
 from desktop.service import HOST  # noqa: E402
 
 TOKEN = 'a' * 44
+try:  # The offline lane has no upstream checkout; the real service needs it.
+    import opendirector_api  # noqa: F401
+    UPSTREAM = True
+except ImportError:
+    UPSTREAM = False
 
 
 class Service:
@@ -71,6 +76,7 @@ class Service:
             self.process.stdout.close()
 
 
+@unittest.skipUnless(UPSTREAM, 'needs the upstream OpenDirector packages (run after package.py or on PYTHONPATH)')
 class DesktopCrashRecoveryTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

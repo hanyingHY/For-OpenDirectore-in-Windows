@@ -183,7 +183,9 @@ export async function openReel(page, options = {}) {
       await page.evaluate(() => document.getElementById("od-reel-caption")?.remove()).catch(() => {});
       const last = items.at(-1);
       if (last) {
-        last.rawMs = Date.now() - last.at;
+        // `at` is relative to startedAt; mixing it with Date.now() made the last frame
+        // ~1.8e12 ms long and stretched every reel's duration (desktop.14 finding).
+        last.rawMs = Date.now() - startedAt - last.at;
         last.holdMs = Math.min(Math.max(last.rawMs, MIN_HOLD_MS), maxHoldMs);
       }
       const manifest = { width: size.width, height: size.height, items: items.map(({ at, hash, ...keep }) => keep) };
@@ -248,8 +250,9 @@ async function encodeWithFfmpeg(ffmpeg, dir, manifest, outPath) {
   const quote = (value) => `'${value.replace(/'/g, "'\\''")}'`;
   const lines = [];
   for (const item of manifest.items) {
-    // Real intervals (floored at one 30 fps frame): the padded holdMs would stretch bursts of frames.
-    lines.push(`file ${quote(join(dir, item.file))}`, `duration ${(Math.max(item.rawMs ?? item.holdMs, 33) / 1000).toFixed(3)}`);
+    // Real intervals. A 33 ms floor (one 30 fps frame) stretched the screencast's 15-19 ms bursts
+    // to twice their length (a 82 s journey came out 148 s); `-r 30` resamples the timeline itself.
+    lines.push(`file ${quote(join(dir, item.file))}`, `duration ${(Math.max(item.rawMs ?? item.holdMs, 1) / 1000).toFixed(3)}`);
   }
   lines.push(`file ${quote(join(dir, manifest.items.at(-1).file))}`);
   const list = join(dir, "frames.txt");

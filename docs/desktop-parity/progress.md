@@ -76,3 +76,19 @@
 - `python -m unittest discover -s tests`：24 项全绿。
 
 环境要点（沙箱）：Chromium 131 取自 `@sparticuz/chromium` 包（libnss 等依赖由其 `al2`/`al2023` 包解出，`LD_LIBRARY_PATH` 仅给浏览器，不能全局设置，否则系统 sqlite3 失败）；ffmpeg 9.0.2 取自 PyPI `imageio-ffmpeg`，ffprobe 取自 npm `@ffprobe-installer/ffprobe`；Playwright 驱动为 `playwright-core@1.58.2`（与 canvas.yml 同版本）。夹具必须用固定 `--root` 才能跨重启保留数据。
+
+### desktop.14 · A-1b 完成（UI 旅程 + 录像）
+
+| 编号 | 项目 | 状态 | 证据 / 说明 |
+| --- | --- | --- | --- |
+| A-1b | 强杀后回合显示「回复已中断」，重启后新消息正常完成 | 已验证（沙箱真实 Chromium 旅程） | `verification/agent_crash_recovery.mjs` PASS：回复挂起时 SIGKILL 后端 → 重启 → 重载页面 → 「回复已中断」可见、无「思考中」、无活动回合 → 新消息完成（`complete`）。页面以「窗口等待态」等待旧租约到期（约 60–75 秒）后自动进入，无点击。全量录像 `delivery/desktop14-crash-recovery.mp4`（82.8 秒，1500×950 H.264，sha256 入 SHA256SUMS）；脚本 `verification/agent_crash_reel.mjs`。 |
+| A-1c | 磁盘上的 streaming 状态未被持久化为 interrupted | **已知数据缺口，未修** | 重启后 `conversation.json` 中该消息仍为 `streaming`；界面由「无活动回合」在展示时还原，因此用户看到正确状态。修复需决定：服务端在无活动回合的读取中回写，还是只保留展示层还原。涉及 CLI 与其他窗口的并发判断，留待后续评审。 |
+
+**录像工具两处缺陷（已修正）**，影响所有用 ffmpeg 编码的 reel：
+1. `stop()` 中最后一帧的时长把绝对时间戳 `Date.now()` 与相对时间 `at` 相减，得到约 1.8×10¹² 毫秒。已改为 `Date.now() - startedAt - last.at`。
+2. 编码时每帧时长下限取 33 毫秒（一个 30fps 帧）。截屏帧间隔常为 15–19 毫秒，结果一段 82 秒的旅程被拉长到约 148 秒。已把下限改为 1 毫秒，`-r 30` 负责重采样。
+（`verification/desktop13-agent-lease.mp4` 等早先的沙箱录像可能受同样缺陷影响，本次未重编码，见下一轮。）
+
+沙箱环境补充：中文字体取自 npm `@expo-google-fonts/noto-sans-sc`（TTF，放入 `~/.local/share/fonts`），否则录像中的中文显示为方框。
+
+沙箱复验汇总：`agent_crash_recovery.mjs` PASS；`agent_lease_switch.mjs` PASS；`agent_lease_second_window.mjs` PASS；`open_elsewhere_autoretry.mjs` PASS；`tests/test_desktop_crash_recovery.py` PASS（上游包在 PYTHONPATH 时）；`discover -s tests` 24 项 OK。

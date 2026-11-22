@@ -92,3 +92,5 @@
 沙箱环境补充：中文字体取自 npm `@expo-google-fonts/noto-sans-sc`（TTF，放入 `~/.local/share/fonts`），否则录像中的中文显示为方框。
 
 沙箱复验汇总：`agent_crash_recovery.mjs` PASS；`agent_lease_switch.mjs` PASS；`agent_lease_second_window.mjs` PASS；`open_elsewhere_autoretry.mjs` PASS；`tests/test_desktop_crash_recovery.py` PASS（上游包在 PYTHONPATH 时）；`discover -s tests` 24 项 OK。
+
+**CI 记录**：提交 `95dcaf2` 的 Windows 装机冒烟首次失败（`Exercise installed application` 与 `Publish evidence branch`，日志 CDN 沙箱不可达）；同一运行 `--failed` 重跑后整条 package 通过。判定为偶发（该提交相对前一个绿色提交只新增了一个不进安装包的测试守卫）。仍需留意：若再次出现，应取回日志定位。

@@ -133,3 +133,12 @@
 - `verification/desktop15_full_reel.mjs`: nine chapters on one continuous capture — work-mode first-run picker → text node + real upload → simple-mode presets with a mid-reply switch back to advanced → result card + "View on canvas" → agent plan/build with the real refusal → timeline package import → real H.264 render with `data-od-exporting` → failure card exits + Escape → bilingual close. **PASS**: `delivery/desktop15-full-journey.mp4`, 2754 frames, 116.8 s, 3.53 MB, video/mp4;codecs=avc1 (ffmpeg libx264), SHA256SUMS updated. Commit 3e3bd30.
 - desktop/VERSION bumped to `0.1.5-desktop.15` (ca59a91); the Windows x64 desktop workflow builds the installer artifact for the draft release.
 - Pending: draft release `v0.1.5-desktop.15` (installer + SHA-256 + signing status / SmartScreen note); publishing it publicly needs the user's confirmation.
+
+## desktop.16 · E1 round review and undo (agent-rounds)
+
+- Patch: `patches/agent-round-undo.patch` (after `agent-plan-mode.patch`; wired into `scripts/package.py`, both `canvas.yml` apply lines, the assistant CI lane, `setup.sh` and the chain guard).
+- Backend: each applied undoable Agent write is recorded in `agent-runs/<turn>.changes.jsonl` with its project event cursor. `GET /assistant/turns/{turn}/changes` joins it with history states; `POST /assistant/turns/{turn}/undo` replays `history.undo` newest first with current revisions as `expectedVersions`. Field-level history checks reject later user edits; the first rejection stops the round and is reported. Undo is refused (409) while an Agent run is active.
+- Web: review line under a finished reply ("本轮修改 N 项" / "N change(s) this round"), two-step confirm, zh-CN and en-US strings.
+- Verified (sandbox): `tests/test_agent_rounds.py` 4/4; agent/creation pytest subset 755 passed; full `python -m unittest discover -s tests` 39 OK; `npm run check:i18n` 3302 keys 0 problems; `npm run build` OK; `verification/agent_round_undo.mjs` PASS zh-CN and en-US.
+- Delivery: `delivery/desktop16-round-undo-zh.mp4` (15 s) and `-en.mp4` (15 s), sha256 in SHA256SUMS.txt.
+- Not yet: Windows CI lane for this patch; full nine-chapter reel including E1; undo of agent writes when the same node was edited by the user is intentionally refused, not merged.

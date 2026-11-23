@@ -68,7 +68,8 @@ def build():
     # when the build directory lives inside this distribution repository.
     for patch in ('canvas-placement.patch', 'bundled-agent.patch', 'timeline-output-dismiss.patch', 'agent-gateway-terminal-failure.patch',
                   'export-signal-contract.patch', 'open-elsewhere-autoretry.patch', 'agent-run-lease.patch',
-                  'work-mode.patch', 'export-fallback-copy.patch', 'agent-plan-mode.patch'):
+                  'work-mode.patch', 'export-fallback-copy.patch', 'agent-plan-mode.patch',
+                  'agent-round-undo.patch'):
         subprocess.run(['git', '-c', 'core.autocrlf=false', 'apply', '--no-index', str(ROOT/'patches'/patch)],
                        cwd=src, env={**os.environ, 'GIT_CEILING_DIRECTORIES': str(src.parent)}, check=True)
     npm = shutil.which('npm')

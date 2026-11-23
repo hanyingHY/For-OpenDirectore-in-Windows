@@ -10,7 +10,7 @@ if [ ! -d "$SRC/packages" ]; then
   rm -rf "$SRC" && mkdir -p "$SRC"
   curl -sL "https://codeload.github.com/ThinkFlowLab/OpenDirector/tar.gz/$SHA" -o /tmp/up.tgz
   tar xzf /tmp/up.tgz -C "$SRC" --strip-components=1
-  (cd "$SRC" && git init -q && for p in canvas-placement bundled-agent timeline-output-dismiss agent-gateway-terminal-failure export-signal-contract open-elsewhere-autoretry agent-run-lease work-mode export-fallback-copy agent-plan-mode; do git apply "$REPO/patches/$p.patch"; done)
+  (cd "$SRC" && git init -q && for p in canvas-placement bundled-agent timeline-output-dismiss agent-gateway-terminal-failure export-signal-contract open-elsewhere-autoretry agent-run-lease work-mode export-fallback-copy agent-plan-mode agent-round-undo; do git apply "$REPO/patches/$p.patch"; done)
 fi
 mkdir -p "$HOME/bin"
 [ -x "$HOME/bin/ffmpeg" ] || { pip install -q --user --break-system-packages imageio-ffmpeg; ln -sf "$(python3 -c 'import imageio_ffmpeg as i;print(i.get_ffmpeg_exe())')" "$HOME/bin/ffmpeg"; }

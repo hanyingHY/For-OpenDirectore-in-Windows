@@ -7,7 +7,7 @@ on:
         type: boolean
         default: true
   push:
-    paths: ['patches/**', 'scripts/package.py', 'verification/placement.test.ts', 'verification/timeline_output_dismiss.mjs', 'verification/export_signal_contract.mjs', 'verification/open_elsewhere_autoretry.mjs', 'verification/desktop11_full_reel.mjs', 'verification/timeline_output_reel.mjs', 'verification/reel.mjs', 'verification/browser-engine.mjs', 'verification/frame-connections.patch', 'verification/desktop-error-contract.patch', 'tests/test_export_signal_contract.py', 'tests/test_transport.py', '.github/workflows/canvas.yml']
+    paths: ['patches/**', 'scripts/package.py', 'verification/placement.test.ts', 'verification/timeline_output_dismiss.mjs', 'verification/export_signal_contract.mjs', 'verification/open_elsewhere_autoretry.mjs', 'verification/agent_round_undo.mjs', 'verification/desktop11_full_reel.mjs', 'verification/timeline_output_reel.mjs', 'verification/reel.mjs', 'verification/browser-engine.mjs', 'verification/frame-connections.patch', 'verification/desktop-error-contract.patch', 'tests/test_export_signal_contract.py', 'tests/test_transport.py', '.github/workflows/canvas.yml']
 permissions: {contents: read}
 jobs:
   verify:
@@ -30,7 +30,7 @@ jobs:
           ref: ${{ steps.upstream.outputs.sha }}
           path: source
           persist-credentials: false
-      - run: git apply ../patches/canvas-placement.patch ../patches/bundled-agent.patch ../patches/timeline-output-dismiss.patch ../patches/agent-gateway-terminal-failure.patch ../patches/export-signal-contract.patch ../patches/open-elsewhere-autoretry.patch ../patches/agent-run-lease.patch ../patches/work-mode.patch ../patches/export-fallback-copy.patch ../patches/agent-plan-mode.patch ../verification/desktop-error-contract.patch && cp ../verification/placement.test.ts ../verification/timeline_output_dismiss.mjs ../verification/export_signal_contract.mjs ../verification/open_elsewhere_autoretry.mjs tests/
+      - run: git apply ../patches/canvas-placement.patch ../patches/bundled-agent.patch ../patches/timeline-output-dismiss.patch ../patches/agent-gateway-terminal-failure.patch ../patches/export-signal-contract.patch ../patches/open-elsewhere-autoretry.patch ../patches/agent-run-lease.patch ../patches/work-mode.patch ../patches/export-fallback-copy.patch ../patches/agent-plan-mode.patch ../patches/agent-round-undo.patch ../verification/desktop-error-contract.patch && cp ../verification/agent_round_undo.mjs ../verification/placement.test.ts ../verification/timeline_output_dismiss.mjs ../verification/export_signal_contract.mjs ../verification/open_elsewhere_autoretry.mjs tests/
       - uses: actions/setup-node@v6
         with: {node-version-file: source/.nvmrc}
       - uses: actions/setup-python@v6
@@ -76,6 +76,10 @@ jobs:
             exit 1
           fi
           tail -12 "$RUNNER_TEMP/journey.log"
+          if [[ "$SUITE" == assistant ]]; then
+            LOCALE=zh-CN node tests/agent_round_undo.mjs
+            LOCALE=en-US node tests/agent_round_undo.mjs
+          fi
           if [[ "$SUITE" == canvas ]]; then
             node tests/timeline_output_dismiss.mjs
             node tests/export_signal_contract.mjs
@@ -106,7 +110,7 @@ jobs:
           ref: ${{ steps.upstream.outputs.sha }}
           path: source
           persist-credentials: false
-      - run: git apply ../patches/canvas-placement.patch ../patches/bundled-agent.patch ../patches/timeline-output-dismiss.patch ../patches/agent-gateway-terminal-failure.patch ../patches/export-signal-contract.patch ../patches/open-elsewhere-autoretry.patch ../patches/agent-run-lease.patch ../patches/work-mode.patch ../patches/export-fallback-copy.patch ../patches/agent-plan-mode.patch
+      - run: git apply ../patches/canvas-placement.patch ../patches/bundled-agent.patch ../patches/timeline-output-dismiss.patch ../patches/agent-gateway-terminal-failure.patch ../patches/export-signal-contract.patch ../patches/open-elsewhere-autoretry.patch ../patches/agent-run-lease.patch ../patches/work-mode.patch ../patches/export-fallback-copy.patch ../patches/agent-plan-mode.patch ../patches/agent-round-undo.patch
       - uses: actions/setup-node@v6
         with: {node-version-file: source/.nvmrc}
       - uses: actions/setup-python@v6

@@ -97,6 +97,7 @@ class ExportSignalContractTest(unittest.TestCase):
                 "work-mode.patch",
                 "export-fallback-copy.patch",
                 "agent-plan-mode.patch",
+                "agent-round-undo.patch",
             ],
             "the patch chain order is part of the contract",
         )

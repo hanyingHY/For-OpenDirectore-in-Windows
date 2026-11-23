@@ -79,6 +79,17 @@ try {
   // A2: first run asks once; choosing advanced keeps the rest of the journey on the default path.
   const picker = page.locator(".cw-work-mode-picker");
   await picker.waitFor();
+  // Batch B fix: the picker is parked bottom-left and never blocks the canvas centre.
+  {
+    const box = await picker.boundingBox();
+    const vp = page.viewportSize();
+    assert.ok(Math.abs(box.x - 72) < 8 && Math.abs(box.y + box.height - (vp.height - 64)) < 16,
+      `picker must sit bottom-left: ${JSON.stringify(box)}`);
+    const cx = Math.round(vp.width * 0.75);
+    const cy = Math.round(vp.height * 0.75);
+    const insidePicker = await page.evaluate(([x, y]) => !!document.elementFromPoint(x, y)?.closest(".cw-work-mode-picker"), [cx, cy]);
+    assert.equal(insidePicker, false, "the canvas bottom-right must stay clickable while the picker shows");
+  }
   await picker.getByRole("button", { name: new RegExp(T.pick) }).click();
   await picker.waitFor({ state: "detached" });
   const workspace = page.locator(".cw-workspace");
@@ -126,6 +137,44 @@ try {
   assert.equal(await page.locator(".cw-work-mode-picker").count(), 0, "the first-run picker must not return after a choice");
   await page.waitForFunction(() => document.querySelector(".cw-workspace")?.classList.contains("cw-simple-mode"));
   assert.equal(await page.evaluate(() => localStorage.getItem("opendirector.work-mode.v1")), "simple");
+
+  // A2 · dismissal journey: a fresh context without a stored mode shows the picker again; a
+  // press outside the card hides it for this session only (no preference written), and it
+  // returns after a reload because nothing was persisted. It runs against its own project in
+  // its own context so the first tab's session lease is never contended.
+  {
+    const projectId2 = crypto.randomUUID();
+    await api(`/creation/projects/${projectId2}/commands`, {
+      type: "project.create", projectId: projectId2, commandId: crypto.randomUUID(), payload: { name: `模式 ${projectId2.slice(0, 6)}` },
+    });
+    const context2 = await browser.newContext({
+      locale: LOCALE,
+      viewport: { width: 1440, height: 900 },
+    });
+    await context2.addInitScript(([id, loc]) => {
+      localStorage.removeItem("opendirector.work-mode.v1");
+      localStorage.setItem("opendirector.lastUnifiedFilesystemProject", id);
+      localStorage.setItem("opendirector.modelSetup.v1", "dismissed");
+      localStorage.setItem("opendirector.locale.v1", loc);
+    }, [projectId2, LOCALE]);
+    const page2 = await context2.newPage();
+    page2.setDefaultTimeout(15000);
+    await page2.goto(base);
+    await page2.getByText(T.saved, { exact: true }).waitFor({ state: "attached" });
+    const picker2 = page2.locator(".cw-work-mode-picker");
+    await picker2.waitFor();
+    const vp2 = page2.viewportSize();
+    await page2.mouse.click(Math.round(vp2.width * 0.75), Math.round(vp2.height * 0.75));
+    await picker2.waitFor({ state: "detached" });
+    assert.equal(await page2.evaluate(() => localStorage.getItem("opendirector.work-mode.v1")), null,
+      "dismissing the picker must not write a preference");
+    await page2.reload();
+    await page2.getByText(T.saved, { exact: true }).waitFor({ state: "attached" });
+    await picker2.waitFor();
+    await page2.close();
+    await context2.close();
+  }
+
   assert.equal(errors.length, 0, errors.join("\n"));
   console.log(JSON.stringify({ result: "PASS", journey: "work-mode", opacity: Number(opacity), panelX: Math.round(box.x) }));
 } finally {

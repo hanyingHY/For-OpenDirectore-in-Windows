@@ -14,8 +14,11 @@
 #  * Simple mode presets (A1): a drawer above the composer offers four system
 #    presets that fill the draft (editable there) and a reference-image button
 #    that reuses the composer's existing file input.
+#  * Batch B fix (desktop.14): the first-run picker parks in the bottom-left
+#    corner (72px/64px) so it never blocks the canvas centre or the top tool
+#    area, and a pointer press or Escape outside the card dismisses it for the
+#    session without writing a preference (verified by verification/work_mode.mjs).
 #  * Scope: result cards are follow-up work.
-#
 diff --git a/src/canvas/AssistantPanel.tsx b/src/canvas/AssistantPanel.tsx
 index 70bb8f5..7bbc90d 100644
 --- a/src/canvas/AssistantPanel.tsx
@@ -120,19 +123,38 @@ index 0000000..2c7d818
 +}
 diff --git a/src/canvas/WorkModePicker.tsx b/src/canvas/WorkModePicker.tsx
 new file mode 100644
-index 0000000..d5bc17f
+index 0000000..0b0f9c1
 --- /dev/null
 +++ b/src/canvas/WorkModePicker.tsx
-@@ -0,0 +1,26 @@
+@@ -0,0 +1,45 @@
++import { useEffect, useRef } from "react";
 +import { useI18n } from "../i18n/I18nProvider";
 +import type { WorkMode } from "./workMode";
 +import "./work-mode.css";
 +
-+/** First-run choice between simple and advanced (desktop.14 · A2). Non-modal: the canvas stays usable. Either choice is saved and can be changed later from the top bar. */
-+export function WorkModePicker({ onChoose }: { onChoose: (mode: WorkMode) => void }) {
++/** First-run choice between simple and advanced (desktop.14 · A2). Non-modal and parked in the
++ * bottom-left corner so it never blocks the canvas centre or the top tool area. A pointer press
++ * or Escape outside the card dismisses it for this session without writing a preference. Either
++ * explicit choice is saved and can be changed later from the top bar. */
++export function WorkModePicker({ onChoose, onDismiss }: { onChoose: (mode: WorkMode) => void; onDismiss: () => void }) {
 +  const { t } = useI18n();
++  const cardRef = useRef<HTMLElement | null>(null);
++  useEffect(() => {
++    const onPointerDown = (event: PointerEvent) => {
++      if (cardRef.current && event.target instanceof Node && !cardRef.current.contains(event.target)) onDismiss();
++    };
++    const onKeyDown = (event: KeyboardEvent) => {
++      if (event.key === "Escape") onDismiss();
++    };
++    document.addEventListener("pointerdown", onPointerDown);
++    document.addEventListener("keydown", onKeyDown);
++    return () => {
++      document.removeEventListener("pointerdown", onPointerDown);
++      document.removeEventListener("keydown", onKeyDown);
++    };
++  }, [onDismiss]);
 +  return (
-+    <section className="cw-work-mode-picker" role="region" aria-labelledby="work-mode-picker-title">
++    <section className="cw-work-mode-picker" role="region" aria-labelledby="work-mode-picker-title" ref={cardRef}>
 +      <div className="cw-work-mode-picker-card">
 +        <h2 id="work-mode-picker-title">{t("workMode.picker.title")}</h2>
 +        <p>{t("workMode.picker.hint")}</p>
@@ -152,10 +174,10 @@ index 0000000..d5bc17f
 +}
 diff --git a/src/canvas/work-mode.css b/src/canvas/work-mode.css
 new file mode 100644
-index 0000000..3ab5393
+index 0000000..066bc62
 --- /dev/null
 +++ b/src/canvas/work-mode.css
-@@ -0,0 +1,95 @@
+@@ -0,0 +1,96 @@
 +/* Simple mode (desktop.14 · A1): the conversation is the page, the canvas stays mounted behind it. */
 +.cw-simple-mode .cw-side-panel {
 +  display: none;
@@ -178,11 +200,12 @@ index 0000000..3ab5393
 +  background: #ffffff14;
 +}
 +.cw-work-mode-picker {
++  /* Parked bottom-left (desktop.14 batch B fix): the canvas centre and the top
++     tool area stay clickable while the first-run choice is on screen. */
 +  position: fixed;
-+  top: 72px;
-+  left: 50%;
++  left: 72px;
++  bottom: 64px;
 +  z-index: 60;
-+  transform: translateX(-50%);
 +  pointer-events: auto;
 +}
 +.cw-work-mode-picker-card {
@@ -253,11 +276,11 @@ index 0000000..3ab5393
 +}
 diff --git a/src/canvas/workMode.ts b/src/canvas/workMode.ts
 new file mode 100644
-index 0000000..c9b7d32
+index 0000000..848db43
 --- /dev/null
 +++ b/src/canvas/workMode.ts
-@@ -0,0 +1,32 @@
-+import { useState } from "react";
+@@ -0,0 +1,37 @@
++import { useCallback, useState } from "react";
 +
 +/**
 + * Simple / advanced working mode (desktop.14 · A1). Simple puts the AI conversation in the
@@ -279,18 +302,23 @@ index 0000000..c9b7d32
 +
 +export function useWorkMode() {
 +  const [stored, setStored] = useState<WorkMode | null>(readStoredWorkMode);
++  const [dismissed, setDismissed] = useState(false);
 +  const choose = (next: WorkMode) => {
 +    setStored(next);
++    setDismissed(false);
 +    try {
 +      localStorage.setItem(KEY, next);
 +    } catch {
 +      /* Keep usable without storage. */
 +    }
 +  };
-+  return { mode: stored ?? "advanced", choose, unchosen: stored === null } as const;
++  // Dismissing the first-run picker only hides it for this session (desktop.14 · A2):
++  // no preference is written, the effective mode stays advanced.
++  const dismiss = useCallback(() => setDismissed(true), []);
++  return { mode: stored ?? "advanced", choose, dismiss, unchosen: stored === null && !dismissed } as const;
 +}
 diff --git a/src/canvas/workspace/WorkspaceView.tsx b/src/canvas/workspace/WorkspaceView.tsx
-index b8a780b..f98687f 100644
+index b8a780b..135436a 100644
 --- a/src/canvas/workspace/WorkspaceView.tsx
 +++ b/src/canvas/workspace/WorkspaceView.tsx
 @@ -49,6 +49,9 @@ import { REFERENCE_PORT_ICON_SIZE, REFERENCE_PORT_SIZE, referencePortDirection,
@@ -364,7 +392,7 @@ index b8a780b..f98687f 100644
            />
          )}
 +      {workModeState.unchosen && !welcomeOpen && !shouldShowModelSetup() && (
-+        <WorkModePicker onChoose={(mode) => workModeState.choose(mode)} />
++        <WorkModePicker onChoose={(mode) => workModeState.choose(mode)} onDismiss={workModeState.dismiss} />
 +      )}
        {welcomeOpen && <WelcomeScreen
          catalog={backendCatalog}

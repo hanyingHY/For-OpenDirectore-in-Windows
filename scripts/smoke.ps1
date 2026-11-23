@@ -1,4 +1,4 @@
-﻿#Requires -Version 7.0
+#Requires -Version 7.0
 $ErrorActionPreference='Stop'
 trap { Write-Output ("::error::Smoke line {0}: {1}" -f $_.InvocationInfo.ScriptLineNumber,$_.Exception.Message); exit 1 }
 Get-ChildItem -Path delivery/windows-*.png,delivery/windows-*.mp4,delivery/timeline-export.mp4 -ErrorAction SilentlyContinue | Remove-Item
@@ -123,6 +123,12 @@ function Test-UI($phase) {
                 & "$root\app\OpenDirector-CLI.exe" --help | Out-Null
                 if ($LASTEXITCODE) { throw 'CLI help must work without a live desktop' }
             }
+            # desktop.15 · C6/C5-lite: the taskbar sync timer must have started cleanly.
+            $logPath="$env:LOCALAPPDATA\OpenDirector\Desktop\desktop.log"
+            $log=Get-Content $logPath -Raw -ErrorAction SilentlyContinue
+            if (!$log -or $log -notmatch 'Taskbar progress enabled') { throw 'Taskbar progress did not start (C6)' }
+            if ($log -match 'Taskbar sync:') { throw 'Taskbar sync reported an error (C6)' }
+            Pass 'taskbar progress polling active without errors'
             Pass 'occupied legacy port, authenticated desktop, hide and single-instance restore'
         }
     } finally {

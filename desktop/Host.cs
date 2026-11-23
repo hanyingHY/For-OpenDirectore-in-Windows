@@ -36,6 +36,76 @@ internal static class Host {
     }
     [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr window);
     [DllImport("user32.dll")] static extern bool AllowSetForegroundWindow(int pid);
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [StructLayout(LayoutKind.Sequential)]
+    struct FlashInfo { public uint Size; public IntPtr Window; public uint Flags; public uint Count; public uint Timeout; }
+    [DllImport("user32.dll")] static extern bool FlashWindowEx(ref FlashInfo info);
+    // desktop.15 · C5-lite: a finished render/export flashes the taskbar entry when the
+    // window is not the foreground window, so leaving the window during a long job is safe.
+    static void Flash() {
+        if(main==null || !main.IsHandleCreated) return;
+        var info = new FlashInfo { Size=(uint)Marshal.SizeOf(typeof(FlashInfo)), Window=main.Handle, Flags=3|0xC /* FLASHW_ALL|FLASHW_TIMERNOFGO */, Count=0, Timeout=0 };
+        FlashWindowEx(ref info);
+    }
+    // desktop.15 · C6: the Windows taskbar shows render/export progress, exactly like any
+    // native app. The state is the same host contract the exit confirm already reads
+    // (data-od-exporting, with the render progress element as the legacy fallback).
+    [ComImport, Guid("ea1afb91-9e28-4b86-90e9-9e9f8a5eefaf"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface ITaskbarList3 {
+        // ITaskbarList vtable (order matters for COM).
+        void HrInit(); void AddTab(IntPtr tab); void DeleteTab(IntPtr tab); void ActivateTab(IntPtr tab); void SetActiveAlt(IntPtr tab);
+        // ITaskbarList3 additions; unused slots stay declared so the call offsets hold.
+        void SetProgressState(IntPtr window, uint state);
+        void SetProgressValue(IntPtr window, ulong done, ulong total);
+        void SetOverlayIcon(IntPtr window, IntPtr icon, string description);
+        void SetThumbnailTooltip(IntPtr window, string tooltip);
+        void SetThumbnailClip(IntPtr window, IntPtr rect);
+        void ThumbBarAddButtons(IntPtr window, uint count, IntPtr buttons);
+        void ThumbBarSetImageList(IntPtr window, IntPtr list);
+        void ThumbBarUpdateButtons(IntPtr window, uint count, IntPtr buttons);
+        void SetTabProperties(IntPtr window, uint properties);
+    }
+    [ComImport, Guid("56FDF344-FD6D-11d0-958A-006097C9A090")]
+    class TaskbarListClass { }
+    const uint TBPF_NOPROGRESS = 0, TBPF_INDETERMINATE = 1, TBPF_NORMAL = 2;
+    static System.Windows.Forms.Timer activity;
+    static int busyViews;
+    // One poll per second on the UI thread. The probe answers '0' (idle),
+    // '1' (busy, no percent) or '2 <percent>' from the page's own signals.
+    static void StartTaskbarSync() {
+        ITaskbarList3 bar = null;
+        try { bar=(ITaskbarList3)(object)new TaskbarListClass(); bar.HrInit(); Write("Taskbar progress enabled"); }
+        catch(Exception ex) { Write("Taskbar progress unavailable: "+ex.Message); bar=null; }
+        activity = new System.Windows.Forms.Timer { Interval=1000 };
+        activity.Tick += async (s,e) => {
+            activity.Stop();
+            int state = 0, percent = -1;
+            try {
+                foreach(Form f in Application.OpenForms) {
+                    if(f.IsDisposed) continue;
+                    foreach(Control c in f.Controls) {
+                        var v=c as WebView2; if(v==null || v.IsDisposed) continue;
+                        try {
+                            var probe=v.ExecuteScriptAsync("(()=>{const d=document.documentElement;if(!d.hasAttribute('data-od-exporting')&&!document.querySelector('.cw-render-status progress,.cw-timeline-pending:not(:has(.cw-timeline-pending-error))'))return '0';const p=document.querySelector('.cw-render-status progress');if(p&&+p.max>0)return '2 '+Math.max(0,Math.min(100,Math.round(100*p.value/p.max)));return '1';})()");
+                            if(await Task.WhenAny(probe,Task.Delay(1500))!=probe) continue;
+                            var parts=(await probe).Trim().Trim('"').Split(' ');
+                            int flag; if(!int.TryParse(parts[0],out flag)) continue;
+                            if(flag!=0) { state=flag; if(flag==2&&parts.Length>1) { int pc; if(int.TryParse(parts[1],out pc)) percent=pc; } }
+                        } catch(Exception) { /* the view may be disposing or mid-navigation */ }
+                    }
+                }
+                if(bar!=null && main.IsHandleCreated) {
+                    if(state==0) bar.SetProgressState(main.Handle,TBPF_NOPROGRESS);
+                    else if(state==2&&percent>=0) { bar.SetProgressState(main.Handle,TBPF_NORMAL); bar.SetProgressValue(main.Handle,(ulong)percent,100); }
+                    else bar.SetProgressState(main.Handle,TBPF_INDETERMINATE);
+                }
+                if(busyViews>0 && state==0 && !closing && main.IsHandleCreated && GetForegroundWindow()!=main.Handle) Flash();
+                busyViews = state==0 ? 0 : 1;
+            } catch(Exception ex) { Write("Taskbar sync: "+ex.Message); }
+            finally { if(!closing) activity.Start(); }
+        };
+        activity.Start();
+    }
     static async Task<bool> Confirm(string operation) {
         if(confirming || closing) return false;
         Restore(); confirming=true;
@@ -243,8 +313,9 @@ internal static class Host {
                     service.EnableRaisingEvents=true;
                     engine=await CoreWebView2Environment.CreateAsync(null, Path.Combine(State,"WebView2"),new CoreWebView2EnvironmentOptions("--host-resolver-rules=\"MAP 127.0.0.1:48765 127.0.0.1:"+port+"\""));
                     await Mount(main,Origin+"/");
-                    if(!closing) updates=new Updates(main, Restore, Confirm, () => { closing=true; main.Close(); }, Write,
+                    if(!closing) { updates=new Updates(main, Restore, Confirm, () => { closing=true; main.Close(); }, Write,
                         p => { if(!AssignProcessToJobObject(job,p.Handle) && !p.HasExited) throw new System.ComponentModel.Win32Exception(); });
+                        StartTaskbarSync(); }
                 } catch(WebView2RuntimeNotFoundException) { Fail(new Exception("Install Microsoft Edge WebView2 Evergreen Runtime (x64), then reopen. / 请安装微软 WebView2 Evergreen x64 运行时后重试。")); }
                   catch(Exception ex) { Fail(ex); } };
                 main.FormClosing += (s,e) => {
@@ -253,7 +324,7 @@ internal static class Host {
                     if(!closing && updates!=null && e.CloseReason==CloseReason.UserClosing) { e.Cancel=true; main.Hide(); updates.Hidden(); return; }
                     closing=true;
                 };
-                try { Application.Run(main); } finally { wake.Dispose(); }
+                try { Application.Run(main); } finally { wake.Dispose(); if(activity!=null) activity.Dispose(); }
             } catch(Exception e) { Error(e); }
             finally { closing=true; if(updates!=null) updates.Dispose(); try { if(service!=null && !service.HasExited) { service.StandardInput.Close(); service.WaitForExit(5000); } } catch(InvalidOperationException) {} finally { if(job!=IntPtr.Zero) CloseHandle(job); try { File.Delete(Ticket); } catch(IOException) {} } }
         }

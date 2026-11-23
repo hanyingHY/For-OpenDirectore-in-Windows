@@ -95,9 +95,23 @@ class ExportSignalContractTest(unittest.TestCase):
                 "open-elsewhere-autoretry.patch",
                 "agent-run-lease.patch",
                 "work-mode.patch",
+                "export-fallback-copy.patch",
             ],
             "the patch chain order is part of the contract",
         )
+
+    def test_export_fallback_copy_is_bilingual_and_tied_to_the_h264_error(self) -> None:
+        # C11: the encode failure must also name the fallback that keeps the
+        # timeline (Export JSON / editable bundle), in both locales.
+        fallback = (ROOT / "patches" / "export-fallback-copy.patch").read_text(encoding="utf-8")
+        for locale_file in (
+            "src/i18n/messages/en-US/errors.ts",
+            "src/i18n/messages/zh-CN/errors.ts",
+        ):
+            self.assertIn(locale_file, fallback)
+        self.assertIn("errors.render.mp4H264", fallback)
+        self.assertIn("Export JSON / editable bundle", fallback)
+        self.assertIn("导出 JSON / 可编辑包", fallback)
 
 
 if __name__ == "__main__":

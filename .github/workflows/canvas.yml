@@ -30,7 +30,7 @@ jobs:
           ref: ${{ steps.upstream.outputs.sha }}
           path: source
           persist-credentials: false
-      - run: git apply ../patches/canvas-placement.patch ../patches/bundled-agent.patch ../patches/timeline-output-dismiss.patch ../patches/agent-gateway-terminal-failure.patch ../patches/export-signal-contract.patch ../patches/open-elsewhere-autoretry.patch ../patches/agent-run-lease.patch ../patches/work-mode.patch ../verification/desktop-error-contract.patch && cp ../verification/placement.test.ts ../verification/timeline_output_dismiss.mjs ../verification/export_signal_contract.mjs ../verification/open_elsewhere_autoretry.mjs tests/
+      - run: git apply ../patches/canvas-placement.patch ../patches/bundled-agent.patch ../patches/timeline-output-dismiss.patch ../patches/agent-gateway-terminal-failure.patch ../patches/export-signal-contract.patch ../patches/open-elsewhere-autoretry.patch ../patches/agent-run-lease.patch ../patches/work-mode.patch ../patches/export-fallback-copy.patch ../verification/desktop-error-contract.patch && cp ../verification/placement.test.ts ../verification/timeline_output_dismiss.mjs ../verification/export_signal_contract.mjs ../verification/open_elsewhere_autoretry.mjs tests/
       - uses: actions/setup-node@v6
         with: {node-version-file: source/.nvmrc}
       - uses: actions/setup-python@v6
@@ -106,7 +106,7 @@ jobs:
           ref: ${{ steps.upstream.outputs.sha }}
           path: source
           persist-credentials: false
-      - run: git apply ../patches/canvas-placement.patch ../patches/bundled-agent.patch ../patches/timeline-output-dismiss.patch ../patches/agent-gateway-terminal-failure.patch ../patches/export-signal-contract.patch ../patches/open-elsewhere-autoretry.patch ../patches/agent-run-lease.patch ../patches/work-mode.patch
+      - run: git apply ../patches/canvas-placement.patch ../patches/bundled-agent.patch ../patches/timeline-output-dismiss.patch ../patches/agent-gateway-terminal-failure.patch ../patches/export-signal-contract.patch ../patches/open-elsewhere-autoretry.patch ../patches/agent-run-lease.patch ../patches/work-mode.patch ../patches/export-fallback-copy.patch
       - uses: actions/setup-node@v6
         with: {node-version-file: source/.nvmrc}
       - uses: actions/setup-python@v6

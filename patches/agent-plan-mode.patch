@@ -1,0 +1,398 @@
+# RFC #362 desktop.15 · A3 Plan/Build execution modes (server-enforced).
+#
+# A plan run must never be able to change project state, no matter how the
+# model shapes its tool arguments. Enforcement lives at the single choke point
+# every built-in runtime passes through (ToolGateway -> AgentTools.execute),
+# not in the UI:
+#
+#  * RunContext gains `mode: 'plan' | 'build'` (default 'build'); the API Turn
+#    and Draft payloads accept it, persist it on the user and assistant
+#    messages, and thread it into the RunContext.
+#  * AgentTools.execute refuses every write for plan runs (execute_command with
+#    a canvas/generation/asset command, timeline_package_import, voice_create,
+#    voice_delete) with 403 / code 'plan_readonly'; queries and package exports
+#    stay allowed so a plan can inspect state. gateway passes run.mode through.
+#  * The API localizes the refusal for direct HTTP clients (zh original,
+#    ENGLISH_BY_CODE 'Plan mode is read-only. Switch to Build mode, then run
+#    this action again.'); the web UI maps the same Chinese detail to a locale
+#    string via assistantToolText (assistant.reply.toolPlanReadonly).
+#  * Composer toolbar gains a compact Plan/Build radiogroup (aria-checked,
+#    disabled while sending); a plan turn's user message carries a 'Plan'
+#    badge so the reply's refusal reads as intended.
+#  * Browser fixture: an armed write during a plan run is refused through the
+#    real ToolGateway (assistantModes / planRefusals in creation-test-health),
+#    so the journey proves the server side end-to-end.
+#
+# Verified: tsc clean, build ok, i18n 3294 keys / 0 problems, work_mode zh+en
+# regression PASS, agent_plan_mode zh+en PASS (modes=[build,build,plan,build],
+# refusal code=plan_readonly, writes unchanged).
+#
+diff --git a/apps/api/src/opendirector_api/agent.py b/apps/api/src/opendirector_api/agent.py
+index f6f39e5..07a5ea8 100644
+--- a/apps/api/src/opendirector_api/agent.py
++++ b/apps/api/src/opendirector_api/agent.py
+@@ -52,6 +52,7 @@ class Draft(BaseModel):
+     builtinModelThinking: dict[str, Literal['auto', 'low', 'medium', 'high']] = Field(default_factory=dict)
+     modelSelections: dict[str, str | None] = Field(default_factory=dict)
+     skills: list[str] = Field(default_factory=list, max_length=1)
++    mode: Literal['plan', 'build'] = 'build'
+ 
+ 
+ class Turn(BaseModel):
+@@ -67,6 +68,7 @@ class Turn(BaseModel):
+     thinking: Literal['auto', 'low', 'medium', 'high'] = 'auto'
+     modelSelections: dict[str, str | None] = Field(default_factory=dict)
+     skills: list[str] = Field(default_factory=list, max_length=1)
++    mode: Literal['plan', 'build'] = 'build'
+ 
+ 
+ def draft_content_is_empty(content):
+@@ -443,6 +445,7 @@ def agent_routes(projects, generation, configs, provider=None, *, active=None) -
+                             'size': asset.metadata.size, 'fingerprint': asset.fingerprint}
+                             for asset in (assets[str(key)] for key in value.assets)],
+                         'skills': value.skills, 'runtime': value.runtime, 'runtimeModel': value.runtimeModel,
++                        'mode': value.mode,
+                         'modelSelections': dict(value.modelSelections),
+                         'model': model, 'modelIsCliDefault': model_is_cli_default, 'status': 'complete'}
+                     saved = await asyncio.to_thread(conversations.update, project_id, run_session, begin=user,
+@@ -471,7 +474,8 @@ def agent_routes(projects, generation, configs, provider=None, *, active=None) -
+                     run = RunContext(runtime=value.runtime, project_id=project_id, turn_id=value.id,
+                         session=run_session, directory=directory, config=config, messages=context,
+                         selected_skills=value.skills, thinking=value.thinking, model_selections=model_selections,
+-                        runtime_model=value.runtimeModel, skills=available, conversation_id=UUID(saved['conversationId']))
++                        runtime_model=value.runtimeModel, skills=available, conversation_id=UUID(saved['conversationId']),
++                        mode=value.mode)
+                     async with aclosing(runtimes.stream(run)) as stream:
+                         async for event in stream:
+                             if event['type'] == 'delta':
+@@ -523,6 +527,7 @@ def agent_routes(projects, generation, configs, provider=None, *, active=None) -
+                                 'id': str(uuid5(value.id, 'assistant')), 'role': 'assistant', 'text': text, 'status': status,
+                                 'model': model, 'modelIsCliDefault': model_is_cli_default,
+                                 'runtime': value.runtime, 'thinking': value.thinking, 'tools': activities,
++                                'mode': value.mode,
+                                 'sources': list(sources.values()),
+                                 **({'plan': plan} if plan is not None else {})}, conversation_id=value.conversationId)
+                         else:
+diff --git a/apps/api/src/opendirector_api/localization.py b/apps/api/src/opendirector_api/localization.py
+index eb06bf7..fe4e666 100644
+--- a/apps/api/src/opendirector_api/localization.py
++++ b/apps/api/src/opendirector_api/localization.py
+@@ -99,6 +99,7 @@ ENGLISH_BY_CODE = {
+     "storage_unavailable": "A stored file is missing or has changed. Restore the file and try again.",
+     "capability_unsupported": "This capability is not supported yet.",
+     "operation_rejected": "The operation was rejected. Reload the item and try again.",
++    "plan_readonly": "Plan mode is read-only. Switch to Build mode, then run this action again.",
+     "storage_busy": "Project storage is busy. Try again shortly.",
+     "project_open_elsewhere": "This project is open in another window. Close it there and try again.",
+     "local_only": "Only this computer can access the project service.",
+diff --git a/packages/core/src/opendirector/agent/context.py b/packages/core/src/opendirector/agent/context.py
+index 1a3a66e..801d943 100644
+--- a/packages/core/src/opendirector/agent/context.py
++++ b/packages/core/src/opendirector/agent/context.py
+@@ -28,6 +28,9 @@ class RunContext:
+     thinking: str = 'auto'
+     runtime_model: str | None = None
+     skills: list[dict[str, str]] = field(default_factory=list)
++    # A3: 'plan' runs may only read project state; writes are refused at the
++    # business-tool entry (see AgentTools.execute). 'build' is the default.
++    mode: str = 'build'
+ 
+     def native_session_path(self) -> Path | None:
+         if self.conversation_id is None:
+diff --git a/packages/core/src/opendirector/agent/gateway.py b/packages/core/src/opendirector/agent/gateway.py
+index 6f11d13..c0b6ca8 100644
+--- a/packages/core/src/opendirector/agent/gateway.py
++++ b/packages/core/src/opendirector/agent/gateway.py
+@@ -75,7 +75,7 @@ class ToolGateway:
+                 value = await self.business.execute(self.run.project_id, self.run.turn_id, self.run.session,
+                     call_id, name, arguments, self.roots, self.run.config,
+                     self.run.runtime if self.run.config is None else None,
+-                    self.execution_directory)
++                    self.execution_directory, self.run.mode)
+                 if name == 'read_project':
+                     value['modelSelections'] = dict(self.model_selections)
+                 error = None
+diff --git a/packages/core/src/opendirector/agent/tools.py b/packages/core/src/opendirector/agent/tools.py
+index 82468bc..6511ece 100644
+--- a/packages/core/src/opendirector/agent/tools.py
++++ b/packages/core/src/opendirector/agent/tools.py
+@@ -298,7 +298,12 @@ class AgentTools:
+ 
+     async def execute(self, project_id: UUID, turn_id: UUID, session: str, call_id: str,
+                       name: str, arguments: dict, roots: list[Path], config: dict | None, native_runtime: str | None = None,
+-                      execution_directory: Path | None = None) -> JsonValue:
++                      execution_directory: Path | None = None, mode: str = 'build') -> JsonValue:
++        # A3 · Plan mode: the server refuses every project write for this run, no matter
++        # how the tool arguments are shaped. Reads (queries, exports) stay allowed so the
++        # plan can inspect state; the UX labels the reply instead of hiding the refusal.
++        if mode == 'plan' and name in {'timeline_package_import', 'voice_create', 'voice_delete'}:
++            raise ProjectError('计划模式为只读，写入被拒绝。切换到执行模式后再执行此操作。', 403, code='plan_readonly')
+         if name in {'timeline_package_export', 'timeline_package_import'}:
+             with self.projects.local.transaction() as db:
+                 project_directory, _, _ = self.projects._load(db, project_id)
+@@ -429,6 +434,8 @@ class AgentTools:
+             raise ProjectError('未知业务工具。')
+         command = parse_command({**arguments, 'projectId': str(project_id),
+             'commandId': str(agent_command_id(turn_id, call_id))})
++        if mode == 'plan' and command.type in COMMANDS:
++            raise ProjectError('计划模式为只读，写入被拒绝。切换到执行模式后再执行此操作。', 403, code='plan_readonly')
+         if command.type == 'creation.batch' and any(operation.type not in COMMANDS for operation in command.payload.operations):
+             raise ProjectError('批量命令包含未开放的 Agent 操作。', 403)
+         if command.type == 'generation.submit':
+diff --git a/src/backend/chat.ts b/src/backend/chat.ts
+index 51da14a..d35d497 100644
+--- a/src/backend/chat.ts
++++ b/src/backend/chat.ts
+@@ -78,9 +78,12 @@ export interface ChatMessage {
+   runtimeModel?: string | null;
+   thinking?: Thinking;
+   source?: "preview" | "model";
++  mode?: AgentMode;
+ }
+ 
+ export type Thinking = "auto" | "low" | "medium" | "high";
++/** A3: "plan" turns may only read project state; writes are refused server-side. */
++export type AgentMode = "plan" | "build";
+ export type ModelSelections = Partial<
+   Record<"agent" | "image" | "video" | "audio", string | null>
+ >;
+@@ -105,6 +108,7 @@ export interface ChatDraft {
+     Record<Exclude<AgentRuntime, "default">, string | null>
+   >;
+   skills?: string[];
++  mode?: AgentMode;
+ }
+ export interface Conversation extends ChatDraft {
+   messages: ChatMessage[];
+@@ -153,6 +157,7 @@ export interface ChatRequest {
+   runtime?: AgentRuntime;
+   runtimeModel?: string | null;
+   skills?: string[];
++  mode?: AgentMode;
+ }
+ 
+ function normalizeConversation(value: Conversation): Conversation {
+diff --git a/src/canvas/AssistantPanel.tsx b/src/canvas/AssistantPanel.tsx
+index 644e80e..e6c820f 100644
+--- a/src/canvas/AssistantPanel.tsx
++++ b/src/canvas/AssistantPanel.tsx
+@@ -94,6 +94,8 @@ export function AssistantPanel({
+   const t = useT();
+   const chat = useAssistantChat(documentId, catalog, onTurnEnd, t, open);
+   const { value, setValue } = chat;
++  // A3: plan turns refuse project writes server-side; missing mode = build.
++  const mode = value.mode === "plan" ? "plan" : "build";
+   const [deepseekLabels, setDeepseekLabels] = useState<Record<string, string>>({});
+   const hasDeepseekMessages = value.messages.some((message) => message.runtime === "deepseek");
+   useEffect(() => {
+@@ -493,6 +495,11 @@ export function AssistantPanel({
+                 {t("assistant.panel.trace")} ↗
+               </a>
+             )}
++            {message.role === "user" && message.mode === "plan" && (
++              <small className="cw-assistant-message-status cw-assistant-plan-badge">
++                {t("assistant.mode.planBadge")}
++              </small>
++            )}
+             {message.role === "user" && !!message.assets?.length && <AttachmentStrip projectId={documentId} assets={message.assets.map(resolveAsset)} />}
+             {(message.status === "stopped" ||
+               message.status === "interrupted") && (
+@@ -733,6 +740,26 @@ export function AssistantPanel({
+               onChange={chat.selectAgent}
+               onConfigure={onOpenSettings}
+             />
++            <div
++              className="cw-assistant-mode"
++              role="radiogroup"
++              aria-label={t("assistant.mode.label")}
++            >
++              {(["plan", "build"] as const).map((option) => (
++                <button
++                  key={option}
++                  type="button"
++                  role="radio"
++                  aria-checked={mode === option}
++                  className={`cw-assistant-mode-option${mode === option ? " is-active" : ""}`}
++                  title={t(option === "plan" ? "assistant.mode.planHint" : "assistant.mode.buildHint")}
++                  disabled={!chat.loaded || chat.sending}
++                  onClick={() => chat.selectAgent({ mode: option })}
++                >
++                  {t(option === "plan" ? "assistant.mode.plan" : "assistant.mode.build")}
++                </button>
++              ))}
++            </div>
+             <SkillPicker
+               projectId={documentId}
+               selected={value.skills ?? []}
+diff --git a/src/canvas/assistant-panel.css b/src/canvas/assistant-panel.css
+index aecc065..8b53028 100644
+--- a/src/canvas/assistant-panel.css
++++ b/src/canvas/assistant-panel.css
+@@ -855,3 +855,49 @@
+   inset-inline-end: 12px;
+   color: inherit;
+ }
++
++/* A3 · Plan/Build mode: compact two-state control in the composer toolbar. */
++.cw-assistant-mode {
++  display: inline-flex;
++  align-items: center;
++  border: 1px solid var(--cw-border, rgba(255, 255, 255, 0.16));
++  border-radius: 999px;
++  overflow: hidden;
++  flex: none;
++}
++
++.cw-assistant-mode-option {
++  appearance: none;
++  border: 0;
++  background: transparent;
++  color: inherit;
++  font: inherit;
++  font-size: 12px;
++  line-height: 1;
++  padding: 6px 10px;
++  cursor: pointer;
++  opacity: 0.62;
++}
++
++.cw-assistant-mode-option + .cw-assistant-mode-option {
++  border-inline-start: 1px solid var(--cw-border, rgba(255, 255, 255, 0.16));
++}
++
++.cw-assistant-mode-option.is-active {
++  opacity: 1;
++  background: var(--cw-accent-soft, rgba(124, 156, 255, 0.18));
++  font-weight: 600;
++}
++
++.cw-assistant-mode-option:disabled {
++  cursor: default;
++  opacity: 0.4;
++}
++
++.cw-assistant-plan-badge {
++  margin-top: 4px;
++  padding: 2px 8px;
++  border-radius: 999px;
++  border: 1px solid var(--cw-border, rgba(255, 255, 255, 0.16));
++  align-self: flex-start;
++}
+diff --git a/src/canvas/assistantToolText.ts b/src/canvas/assistantToolText.ts
+index df273e4..5afd0bc 100644
+--- a/src/canvas/assistantToolText.ts
++++ b/src/canvas/assistantToolText.ts
+@@ -20,6 +20,8 @@ const BY_MESSAGE: Record<string, MessageKey> = {
+   "当前模型不支持所选图片质量，请选择自动或切换模型。":
+     "errors.rules.imageQualityUnsupported",
+   "未知业务工具。": "assistant.reply.toolUnknown",
++  "计划模式为只读，写入被拒绝。切换到执行模式后再执行此操作。":
++    "assistant.reply.toolPlanReadonly",
+   "批量命令包含未开放的 Agent 操作。": "assistant.reply.toolForbidden",
+ };
+ 
+diff --git a/src/canvas/useAssistantChat.ts b/src/canvas/useAssistantChat.ts
+index 3b223a1..a63d196 100644
+--- a/src/canvas/useAssistantChat.ts
++++ b/src/canvas/useAssistantChat.ts
+@@ -54,6 +54,7 @@ const empty = (): Conversation => ({
+   draft: "",
+   assets: [],
+   thinking: "auto",
++  mode: "build",
+   modelSelections: {},
+ });
+ 
+@@ -475,6 +476,7 @@ export function useAssistantChat(
+           thinking: builtinThinking(input, agent?.id),
+           modelSelections: input.modelSelections,
+           skills: input.skills ?? [],
++          mode: input.mode ?? "build",
+         },
+         signal,
+         onEvent,
+diff --git a/src/i18n/messages/en-US/assistant.ts b/src/i18n/messages/en-US/assistant.ts
+index 3e19abd..853d7e3 100644
+--- a/src/i18n/messages/en-US/assistant.ts
++++ b/src/i18n/messages/en-US/assistant.ts
+@@ -118,7 +118,15 @@ export const assistant = {
+   "assistant.reply.copyReply": "Copy reply",
+   "assistant.reply.copied": "Copied",
+   "assistant.reply.copyFailed": "Copy failed; select the text to copy it",
++  "assistant.mode.label": "Agent mode",
++  "assistant.mode.plan": "Plan",
++  "assistant.mode.build": "Build",
++  "assistant.mode.planHint": "Plan mode: the Agent analyzes the project read-only, without editing the canvas.",
++  "assistant.mode.buildHint": "Build mode: the Agent can edit the canvas and run actions.",
++  "assistant.mode.planBadge": "Plan",
+   "assistant.reply.toolError": "The tool failed. Expand the details.",
++  "assistant.reply.toolPlanReadonly":
++    "Plan mode is read-only. Switch to Build mode, then run this action again.",
+   "assistant.reply.toolClosed": "The tool entry point is closed for this turn.",
+   "assistant.reply.toolIdConflict":
+     "The tool call id was reused with different input.",
+diff --git a/src/i18n/messages/zh-CN/assistant.ts b/src/i18n/messages/zh-CN/assistant.ts
+index 4c95240..b93b68f 100644
+--- a/src/i18n/messages/zh-CN/assistant.ts
++++ b/src/i18n/messages/zh-CN/assistant.ts
+@@ -117,7 +117,14 @@ export const assistant = {
+   "assistant.reply.copyReply": "复制回复",
+   "assistant.reply.copied": "已复制",
+   "assistant.reply.copyFailed": "复制失败，请选择正文复制",
++  "assistant.mode.label": "Agent 模式",
++  "assistant.mode.plan": "计划",
++  "assistant.mode.build": "执行",
++  "assistant.mode.planHint": "计划模式：Agent 只读分析项目，不改动画布。",
++  "assistant.mode.buildHint": "执行模式：Agent 可以编辑画布并执行生成。",
++  "assistant.mode.planBadge": "计划",
+   "assistant.reply.toolError": "工具执行失败，请展开查看详情。",
++  "assistant.reply.toolPlanReadonly": "计划模式为只读，写入被拒绝。切换到执行模式后再执行此操作。",
+   "assistant.reply.toolClosed": "本轮工具入口已关闭。",
+   "assistant.reply.toolIdConflict": "工具调用标识被用于不同输入。",
+   "assistant.reply.toolHostScope": "查询身份与工程范围由宿主提供。",
+diff --git a/tests/browser/creation_server.py b/tests/browser/creation_server.py
+index 3d2072c..4a050f3 100644
+--- a/tests/browser/creation_server.py
++++ b/tests/browser/creation_server.py
+@@ -153,6 +153,8 @@ if args.http_generation_fixture:
+ assistant_gate = asyncio.Event()
+ assistant_gate.set()
+ assistant_contexts = []
++assistant_modes = []
++plan_refusals = []
+ assistant_write_names = []
+ assistant_writes = []
+ 
+@@ -181,10 +183,23 @@ if args.assistant_fixture:
+ 
+     async def fixture_agent(self, run):
+         assistant_contexts.append(run.messages)
++        assistant_modes.append(getattr(run, 'mode', 'build'))
+         yield {'type': 'delta', 'text': '已收到创作要求。'}
+         await assistant_gate.wait()
+         while assistant_write_names:
+-            await write_as_agent(run, assistant_write_names.pop(0))
++            name = assistant_write_names.pop(0)
++            if getattr(run, 'mode', 'build') == 'plan':
++                # A3: arm a write while in plan mode and refuse it through the
++                # real gateway the built-in runtime uses, so the browser journey
++                # proves the server refuses project writes for plan runs.
++                from opendirector.agent.gateway import ToolGateway
++                result = await ToolGateway(self.business, run).execute(
++                    'plan-refusal-probe', 'execute_command',
++                    {'type': 'asset.writeText', 'payload': {'name': name, 'text': 'plan mode must not write'}})
++                plan_refusals.append(dict(name=name, mode=run.mode,
++                    code=result.value.get('code'), error=result.error))
++                continue
++            await write_as_agent(run, name)
+         yield {'type': 'delta', 'text': '这是隔离测试回复。'}
+ 
+     agent.AgentRuntimes.stream = fixture_agent
+@@ -221,6 +236,7 @@ def health():
+                 calls=http_generation_calls if args.http_generation_fixture else provider.calls, toolCalls=tool_calls,
+                 selectionCalls=selection_calls, selectionActive=selection_active, imageEditCalls=image_edit_calls,
+                 assistantFixture=args.assistant_fixture, assistantContexts=assistant_contexts, assistantWrites=assistant_writes,
++                assistantModes=assistant_modes, planRefusals=plan_refusals,
+                 httpGenerationFixture=args.http_generation_fixture)
+ 
+ 

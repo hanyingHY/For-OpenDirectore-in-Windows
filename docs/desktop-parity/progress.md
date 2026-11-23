@@ -100,5 +100,7 @@
 - Patch: `patches/work-mode.patch` (wired into `scripts/package.py` and the canvas workflow).
 - Behaviour: top-bar toggle; simple mode centres the AI conversation, hides the side panel and dims the canvas. Preference stored locally; switching never edits a project or cancels a running reply.
 - Verified: `verification/work_mode.mjs` passes in zh-CN and en-US against the assistant fixture (panel centred, canvas dimmed, reply completes after a mode switch, preference survives reload). `npm run check:i18n` passes (3267 keys, 0 problems). `npm run build` passes.
-- Not yet done: A2 first-run mode picker, result cards and the default-preset drawer; the batch B reel.
+- A2 first-run picker: added (non-modal, shown once after the model-setup welcome, until a mode is chosen). `verification/work_mode.mjs` now covers the picker in zh-CN and en-US.
+- Not yet done: result cards and the default-preset drawer; the batch B reel.
+- Note: the picker is non-modal so existing browser tests are not blocked; the full browser suite has not been re-run since A2.
 - Sandbox caveats: `created_node_focus` fails identically on the unpatched baseline (`operation_rejected`, "item changed or is busy"). `editor_save` fails with the same backend error and was not run on baseline. `timeline_node_output` (cancel-button timeout) and `timeline_workflow` (system sqlite3 import error) are environment-suspect and unresolved. The other browser-suite workflows pass after the Chromium headless-shell link and a fresh fixture root.

@@ -8,15 +8,50 @@
 #    the top bar. Switching never edits a project and never cancels a reply:
 #    verified by verification/work_mode.mjs (a reply started in simple mode
 #    completes after switching to advanced; the preference survives a reload).
-#  * Scope of this MVP: layout and focus only. Result cards, the default-preset
-#    drawer and the first-run mode picker (A2) are follow-up work.
+#  * First run (A2): a non-modal picker appears once, after the model-setup
+#    welcome is dismissed and only while no mode has been chosen. Either
+#    choice is saved and changeable from the top bar.
+#  * Scope: layout and focus only. Result cards and the default-preset drawer
+#    are follow-up work.
 #
+diff --git a/src/canvas/WorkModePicker.tsx b/src/canvas/WorkModePicker.tsx
+new file mode 100644
+index 0000000..d5bc17f
+--- /dev/null
++++ b/src/canvas/WorkModePicker.tsx
+@@ -0,0 +1,26 @@
++import { useI18n } from "../i18n/I18nProvider";
++import type { WorkMode } from "./workMode";
++import "./work-mode.css";
++
++/** First-run choice between simple and advanced (desktop.14 · A2). Non-modal: the canvas stays usable. Either choice is saved and can be changed later from the top bar. */
++export function WorkModePicker({ onChoose }: { onChoose: (mode: WorkMode) => void }) {
++  const { t } = useI18n();
++  return (
++    <section className="cw-work-mode-picker" role="region" aria-labelledby="work-mode-picker-title">
++      <div className="cw-work-mode-picker-card">
++        <h2 id="work-mode-picker-title">{t("workMode.picker.title")}</h2>
++        <p>{t("workMode.picker.hint")}</p>
++        <div className="cw-work-mode-picker-options">
++          <button type="button" className="cw-work-mode-option" onClick={() => onChoose("simple")}>
++            <strong>{t("workMode.picker.simple")}</strong>
++            <span>{t("workMode.picker.simpleHint")}</span>
++          </button>
++          <button type="button" className="cw-work-mode-option" onClick={() => onChoose("advanced")}>
++            <strong>{t("workMode.picker.advanced")}</strong>
++            <span>{t("workMode.picker.advancedHint")}</span>
++          </button>
++        </div>
++      </div>
++    </section>
++  );
++}
 diff --git a/src/canvas/work-mode.css b/src/canvas/work-mode.css
 new file mode 100644
-index 0000000..bc04138
+index 0000000..faab7dc
 --- /dev/null
 +++ b/src/canvas/work-mode.css
-@@ -0,0 +1,21 @@
+@@ -0,0 +1,69 @@
 +/* Simple mode (desktop.14 · A1): the conversation is the page, the canvas stays mounted behind it. */
 +.cw-simple-mode .cw-side-panel {
 +  display: none;
@@ -38,63 +73,125 @@ index 0000000..bc04138
 +  color: var(--chat-text, inherit);
 +  background: #ffffff14;
 +}
++.cw-work-mode-picker {
++  position: fixed;
++  top: 72px;
++  left: 50%;
++  z-index: 60;
++  transform: translateX(-50%);
++  pointer-events: auto;
++}
++.cw-work-mode-picker-card {
++  width: min(520px, calc(100vw - 48px));
++  padding: 20px 22px;
++  border-radius: 20px;
++  background: var(--chat-background);
++  color: var(--chat-text);
++  box-shadow: 0 16px 48px #0005;
++}
++.cw-work-mode-picker-card h2 {
++  margin: 0 0 8px;
++  font-size: 20px;
++}
++.cw-work-mode-picker-card p {
++  margin: 0 0 18px;
++  opacity: 0.8;
++}
++.cw-work-mode-picker-options {
++  display: grid;
++  grid-template-columns: 1fr 1fr;
++  gap: 12px;
++}
++.cw-work-mode-option {
++  display: grid;
++  gap: 6px;
++  padding: 16px;
++  text-align: left;
++  color: inherit;
++  background: #ffffff0d;
++  border: 1px solid var(--chat-border);
++  border-radius: 14px;
++  cursor: pointer;
++}
++.cw-work-mode-option:hover,
++.cw-work-mode-option:focus-visible {
++  border-color: currentColor;
++}
++.cw-work-mode-option span {
++  font-size: 13px;
++  opacity: 0.75;
++}
 diff --git a/src/canvas/workMode.ts b/src/canvas/workMode.ts
 new file mode 100644
-index 0000000..fb58c01
+index 0000000..c9b7d32
 --- /dev/null
 +++ b/src/canvas/workMode.ts
-@@ -0,0 +1,29 @@
-+import { useEffect, useState } from "react";
+@@ -0,0 +1,32 @@
++import { useState } from "react";
 +
 +/**
 + * Simple / advanced working mode (desktop.14 · A1). Simple puts the AI conversation in the
 + * centre and dims the canvas; advanced is the full canvas workflow. The choice is a local
 + * preference: switching never edits the project, and a running reply keeps running.
++ * `null` means the user has not chosen yet (A2 first-run picker).
 + */
 +export type WorkMode = "simple" | "advanced";
 +const KEY = "opendirector.work-mode.v1";
 +
-+export function readWorkMode(): WorkMode {
++export function readStoredWorkMode(): WorkMode | null {
 +  try {
-+    return localStorage.getItem(KEY) === "simple" ? "simple" : "advanced";
++    const value = localStorage.getItem(KEY);
++    return value === "simple" || value === "advanced" ? value : null;
 +  } catch {
-+    return "advanced";
++    return null;
 +  }
 +}
 +
 +export function useWorkMode() {
-+  const [mode, setMode] = useState<WorkMode>(readWorkMode);
-+  useEffect(() => {
++  const [stored, setStored] = useState<WorkMode | null>(readStoredWorkMode);
++  const choose = (next: WorkMode) => {
++    setStored(next);
 +    try {
-+      localStorage.setItem(KEY, mode);
++      localStorage.setItem(KEY, next);
 +    } catch {
 +      /* Keep usable without storage. */
 +    }
-+  }, [mode]);
-+  return [mode, setMode] as const;
++  };
++  return { mode: stored ?? "advanced", choose, unchosen: stored === null } as const;
 +}
 diff --git a/src/canvas/workspace/WorkspaceView.tsx b/src/canvas/workspace/WorkspaceView.tsx
-index b8a780b..e97a7bb 100644
+index b8a780b..f0cc9e8 100644
 --- a/src/canvas/workspace/WorkspaceView.tsx
 +++ b/src/canvas/workspace/WorkspaceView.tsx
-@@ -49,6 +49,8 @@ import { REFERENCE_PORT_ICON_SIZE, REFERENCE_PORT_SIZE, referencePortDirection,
+@@ -49,6 +49,9 @@ import { REFERENCE_PORT_ICON_SIZE, REFERENCE_PORT_SIZE, referencePortDirection,
  import { batchCreationKinds, SELECTION_PADDING, SELECTION_PORT_SIZE } from "../selectionReferences";
  
  import "../multi-selection.css";
 +import "../work-mode.css";
 +import { useWorkMode } from "../workMode";
++import { WorkModePicker } from "../WorkModePicker";
  import { CreationRipples } from "../CreationRipples.tsx";
  import { canvasDotGrid } from "../creationRipples.ts";
  import "../node-reference-ports.css";
-@@ -109,6 +111,7 @@ import { DirectorStage, IconButton, helpShortcuts, nodeTypes, edgeTypes, referen
+@@ -82,7 +85,7 @@ import { layoutGroup, orderNodesForCanvas, unstackSelection, type GroupLayout }
+ 
+ import { ProjectSelector } from "../ProjectSelector";
+ import "../settings.css";
+-import { dismissModelSetup } from "../ModelSetup";
++import { dismissModelSetup, shouldShowModelSetup } from "../ModelSetup";
+ 
+ import { WelcomeScreen } from "../WelcomeScreen";
+ import { SettingsDialog } from "../SettingsDialog";
+@@ -109,6 +112,8 @@ import { DirectorStage, IconButton, helpShortcuts, nodeTypes, edgeTypes, referen
  
  
  export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
-+  const [workMode, setWorkMode] = useWorkMode();
++  const workModeState = useWorkMode();
++  const workMode = workModeState.mode;
    const timelineOutput = useTimelineOutput(rt.doc.id, rt.doc.nodes, rt.notify);
    const {
      actionMedia,
-@@ -485,7 +488,7 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
+@@ -485,7 +490,7 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
      <div
        inert={!ready || switching}
        aria-busy={!ready || switching}
@@ -103,7 +200,7 @@ index b8a780b..e97a7bb 100644
        ref={root}
        data-testid="canvas-workspace"
        data-desktop-sidebar={desktop && desktopSidebarOpen ? "open" : "closed"}
-@@ -1041,6 +1044,20 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
+@@ -1041,6 +1046,20 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
            )}
          </div>
          <div className="cw-top-actions">
@@ -112,9 +209,9 @@ index b8a780b..e97a7bb 100644
 +          aria-pressed={workMode === "simple"}
 +          onClick={() => {
 +            if (workMode === "simple") {
-+              setWorkMode("advanced");
++              workModeState.choose("advanced");
 +            } else {
-+              setWorkMode("simple");
++              workModeState.choose("simple");
 +              if (!assistantOpen) showAssistant();
 +            }
 +          }}
@@ -124,29 +221,51 @@ index b8a780b..e97a7bb 100644
            <span ref={assetListAnchor} className="cw-asset-list-anchor">
              <IconButton
                name="search"
+@@ -2874,6 +2893,9 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
+             onClose={closeEditor}
+           />
+         )}
++      {workModeState.unchosen && !welcomeOpen && !shouldShowModelSetup() && (
++        <WorkModePicker onChoose={(mode) => workModeState.choose(mode)} />
++      )}
+       {welcomeOpen && <WelcomeScreen
+         catalog={backendCatalog}
+         onSkip={() => { dismissModelSetup(); setWelcomeOpen(false); }}
 diff --git a/src/i18n/messages/en-US/canvasWorkspace.ts b/src/i18n/messages/en-US/canvasWorkspace.ts
-index e549b85..98889f2 100644
+index e549b85..c0580d4 100644
 --- a/src/i18n/messages/en-US/canvasWorkspace.ts
 +++ b/src/i18n/messages/en-US/canvasWorkspace.ts
-@@ -81,6 +81,8 @@ export const canvasWorkspace = {
+@@ -81,6 +81,14 @@ export const canvasWorkspace = {
    "canvas.workspace.toolbar.undo": "Undo",
    "canvas.workspace.toolbar.redo": "Redo",
    "canvas.workspace.toolbar.help": "Help",
 +  "canvas.workspace.mode.toSimple": "Simple mode",
 +  "canvas.workspace.mode.toAdvanced": "Advanced mode",
++  "workMode.picker.title": "Choose how you work",
++  "workMode.picker.hint": "Simple mode centres the AI conversation so you can start from a sentence. Advanced mode keeps the full canvas workflow. You can switch from the top bar at any time.",
++  "workMode.picker.simple": "Simple mode",
++  "workMode.picker.simpleHint": "Conversation in the centre, start from one sentence.",
++  "workMode.picker.advanced": "Advanced mode",
++  "workMode.picker.advancedHint": "Full canvas, nodes and timeline.",
    "canvas.workspace.toolbar.chat": "Chat with AI",
  
    "canvas.workspace.empty.title": "Your story, directed by you",
 diff --git a/src/i18n/messages/zh-CN/canvasWorkspace.ts b/src/i18n/messages/zh-CN/canvasWorkspace.ts
-index 80c9a8b..91f8a0b 100644
+index 80c9a8b..3d7f117 100644
 --- a/src/i18n/messages/zh-CN/canvasWorkspace.ts
 +++ b/src/i18n/messages/zh-CN/canvasWorkspace.ts
-@@ -82,6 +82,8 @@ export const canvasWorkspace = {
+@@ -82,6 +82,14 @@ export const canvasWorkspace = {
    "canvas.workspace.toolbar.undo": "撤销",
    "canvas.workspace.toolbar.redo": "重做",
    "canvas.workspace.toolbar.help": "使用帮助",
 +  "canvas.workspace.mode.toSimple": "简洁模式",
 +  "canvas.workspace.mode.toAdvanced": "进阶模式",
++  "workMode.picker.title": "选择工作方式",
++  "workMode.picker.hint": "简洁模式把 AI 对话放在画布中央，适合直接描述想要的画面。进阶模式保留完整画布流程。随时可在顶部切换。",
++  "workMode.picker.simple": "简洁模式",
++  "workMode.picker.simpleHint": "对话居中，适合从一句话开始创作。",
++  "workMode.picker.advanced": "进阶模式",
++  "workMode.picker.advancedHint": "完整画布、节点与时间线。",
    "canvas.workspace.toolbar.chat": "与 AI 对话",
  
    "canvas.workspace.empty.title": "你的故事，由你执导",

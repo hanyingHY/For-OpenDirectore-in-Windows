@@ -18,8 +18,8 @@ async function launchBrowser() {
 
 const LOCALE = process.env.LOCALE === "en-US" ? "en-US" : "zh-CN";
 const T = LOCALE === "en-US"
-  ? { saved: "Saved on this device", panel: "AI chat", editor: "Message content", send: "Send message" }
-  : { saved: "已保存到本机", panel: "AI 对话", editor: "消息内容", send: "发送消息" };
+  ? { saved: "Saved on this device", panel: "AI chat", editor: "Message content", send: "Send message", pick: "^Advanced mode" }
+  : { saved: "已保存到本机", panel: "AI 对话", editor: "消息内容", send: "发送消息", pick: "^进阶模式" };
 const base = process.env.CREATION_WEB_URL ?? "http://127.0.0.1:5179";
 const apiUrl = process.env.CREATION_API_URL ?? "http://127.0.0.1:8019";
 const headers = { "X-OpenDirector-Request": "1", "X-OpenDirector-Session": crypto.randomUUID() };
@@ -70,6 +70,11 @@ try {
   }));
   await page.goto(base);
   await page.getByText(T.saved, { exact: true }).waitFor({ state: "attached" });
+  // A2: first run asks once; choosing advanced keeps the rest of the journey on the default path.
+  const picker = page.locator(".cw-work-mode-picker");
+  await picker.waitFor();
+  await picker.getByRole("button", { name: new RegExp(T.pick) }).click();
+  await picker.waitFor({ state: "detached" });
   const workspace = page.locator(".cw-workspace");
   const toggle = page.locator(".cw-mode-toggle");
   const panel = page.getByRole("complementary", { name: T.panel, exact: true });
@@ -108,6 +113,7 @@ try {
   await page.waitForFunction(() => document.querySelector(".cw-workspace")?.classList.contains("cw-simple-mode"));
   await page.reload();
   await page.getByText(T.saved, { exact: true }).waitFor({ state: "attached" });
+  assert.equal(await page.locator(".cw-work-mode-picker").count(), 0, "the first-run picker must not return after a choice");
   await page.waitForFunction(() => document.querySelector(".cw-workspace")?.classList.contains("cw-simple-mode"));
   assert.equal(await page.evaluate(() => localStorage.getItem("opendirector.work-mode.v1")), "simple");
   assert.equal(errors.length, 0, errors.join("\n"));

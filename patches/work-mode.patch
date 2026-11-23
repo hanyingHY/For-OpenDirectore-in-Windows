@@ -20,31 +20,45 @@
 #    session without writing a preference (verified by verification/work_mode.mjs).
 #  * Scope: result cards are follow-up work.
 diff --git a/src/canvas/AssistantPanel.tsx b/src/canvas/AssistantPanel.tsx
-index 70bb8f5..7bbc90d 100644
+index 70bb8f5..644e80e 100644
 --- a/src/canvas/AssistantPanel.tsx
 +++ b/src/canvas/AssistantPanel.tsx
-@@ -8,6 +8,7 @@ import { loadReferenceCatalog } from "../backend/referenceCatalog.ts";
+@@ -8,6 +8,8 @@ import { loadReferenceCatalog } from "../backend/referenceCatalog.ts";
  import "./assistant-panel.css";
  import "./assistant-experience.css";
  import { AttachmentStrip, AttachmentHover } from "./AssistantMedia";
 +import { SimplePresetDrawer, draftWithPreset } from "./SimplePresets";
++import { SimpleResultCards } from "./SimpleResultCards";
  import { AssistantReply } from "./AssistantReply";
  import { AssistantConversations } from "./AssistantConversations";
  import { AgentPicker } from "./AgentPicker";
-@@ -68,9 +69,11 @@ export function AssistantPanel({
+@@ -68,9 +70,13 @@ export function AssistantPanel({
    onModelSelections,
    onOpenSettings,
    onPrepareReferences,
++  onLocateNode,
 +  simple = false,
  }: {
    documentId: string;
    documentTitle: string;
 +  simple?: boolean;
++  onLocateNode?: (nodeId: string) => void;
    catalog: BackendModels;
    nodes: CanvasNode[];
    visibleNodes: CanvasNode[];
-@@ -501,6 +504,14 @@ export function AssistantPanel({
+@@ -499,8 +505,25 @@ export function AssistantPanel({
+           </article>
+         );
          })}
++        {/* Result cards live at the end of the log, next to the reply that produced them.
++          The composer area resizes when the draft clears, so cards parked above it would
++          shift under a click that started before the layout settled. */}
++        <SimpleResultCards
++          nodes={nodes}
++          replyActive={value.messages.some((message) => message.role === "assistant" && message.status === "streaming")}
++          visible={simple}
++          onView={onLocateNode}
++        />
        </div>
        <div className="cw-assistant-composer-area">
 +        {simple && (
@@ -121,6 +135,110 @@ index 0000000..2c7d818
 +    </div>
 +  );
 +}
+diff --git a/src/canvas/SimpleResultCards.tsx b/src/canvas/SimpleResultCards.tsx
+new file mode 100644
+index 0000000..f9bf4e0
+--- /dev/null
++++ b/src/canvas/SimpleResultCards.tsx
+@@ -0,0 +1,98 @@
++import { useEffect, useRef, useState } from "react";
++import { useI18n } from "../i18n/I18nProvider";
++import type { CanvasNode } from "./model";
++import "./work-mode.css";
++
++const signature = (node: CanvasNode) => `${node.data.title}\u0000${node.data.src ?? ""}`;
++
++/** desktop.15 · B'-3: after a simple-mode reply completes, show what appeared on the canvas
++ * while it ran (new or retitled nodes) so a one-sentence request visibly lands somewhere.
++ * The strip only observes the document — it never writes — and a new reply resets it.
++ * The view button hands the node to the workspace (advanced mode + focus), per the
++ * confirmed A1 spec: result cards are the bridge from the one-sentence flow into the
++ * full canvas.
++ *
++ * The pre-reply snapshot is captured during the last idle render, so no effect race can
++ * miss a change that lands immediately after the reply starts. On completion the diff
++ * waits (bounded, armed once) for the document to catch up before giving up. */
++export function SimpleResultCards({
++  nodes,
++  replyActive,
++  visible,
++  onView,
++}: {
++  nodes: CanvasNode[];
++  replyActive: boolean;
++  visible: boolean;
++  onView?: (nodeId: string) => void;
++}) {
++  const { t } = useI18n();
++  const [results, setResults] = useState<CanvasNode[]>([]);
++  const [dismissed, setDismissed] = useState(false);
++  const beforeRef = useRef<Map<string, string> | null>(null);
++  const lastIdleRef = useRef<CanvasNode[]>(nodes);
++  const expiryRef = useRef<number | undefined>(undefined);
++  if (!replyActive) lastIdleRef.current = nodes;
++  useEffect(() => {
++    if (replyActive) {
++      if (expiryRef.current !== undefined) {
++        window.clearTimeout(expiryRef.current);
++        expiryRef.current = undefined;
++      }
++      beforeRef.current = new Map(lastIdleRef.current.map((node) => [node.id, signature(node)]));
++      setResults([]);
++      setDismissed(false);
++      return;
++    }
++    const before = beforeRef.current;
++    if (!before) return;
++    const changed = nodes.filter((node) => before.get(node.id) !== signature(node));
++    if (!changed.length) {
++      // The document may still catch up after the message completes; stop waiting soon.
++      if (expiryRef.current === undefined) {
++        expiryRef.current = window.setTimeout(() => {
++          beforeRef.current = null;
++          expiryRef.current = undefined;
++        }, 3000);
++      }
++      return;
++    }
++    if (expiryRef.current !== undefined) {
++      window.clearTimeout(expiryRef.current);
++      expiryRef.current = undefined;
++    }
++    beforeRef.current = null;
++    setResults(changed.slice(-6));
++  }, [replyActive, nodes]);
++  useEffect(() => () => {
++    if (expiryRef.current !== undefined) window.clearTimeout(expiryRef.current);
++  }, []);
++  if (!visible || dismissed || !results.length) return null;
++  return (
++    <div className="cw-simple-results" role="region" aria-label={t("workMode.results.title")}>
++      <div className="cw-simple-results-head">
++        <strong>{t("workMode.results.title")}</strong>
++        <button
++          type="button"
++          className="cw-simple-results-dismiss"
++          aria-label={t("workMode.results.dismiss")}
++          onClick={() => setDismissed(true)}
++        >
++          ×
++        </button>
++      </div>
++      <div className="cw-simple-results-strip">
++        {results.map((node) => (
++          <div key={node.id} className="cw-simple-result" data-kind={node.type}>
++            <span className="cw-simple-result-title">{node.data.title}</span>
++            {onView && (
++              <button type="button" className="cw-simple-result-view" onClick={() => onView(node.id)}>
++                {t("workMode.results.view")}
++              </button>
++            )}
++          </div>
++        ))}
++      </div>
++    </div>
++  );
++}
 diff --git a/src/canvas/WorkModePicker.tsx b/src/canvas/WorkModePicker.tsx
 new file mode 100644
 index 0000000..df586d3
@@ -176,10 +294,10 @@ index 0000000..df586d3
 +}
 diff --git a/src/canvas/work-mode.css b/src/canvas/work-mode.css
 new file mode 100644
-index 0000000..066bc62
+index 0000000..a42f4ad
 --- /dev/null
 +++ b/src/canvas/work-mode.css
-@@ -0,0 +1,96 @@
+@@ -0,0 +1,166 @@
 +/* Simple mode (desktop.14 · A1): the conversation is the page, the canvas stays mounted behind it. */
 +.cw-simple-mode .cw-side-panel {
 +  display: none;
@@ -276,6 +394,76 @@ index 0000000..066bc62
 +  flex-wrap: wrap;
 +  gap: 6px;
 +}
++
++/* Result cards (desktop.15 · B'-3): what the reply put on the canvas, one click from it. */
++.cw-simple-results {
++  display: grid;
++  gap: 8px;
++  margin-bottom: 8px;
++  padding: 10px 12px;
++  border: 1px solid var(--chat-border);
++  border-radius: 14px;
++  background: var(--chat-background);
++}
++.cw-simple-results-head {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  font-size: 13px;
++}
++.cw-simple-results-dismiss {
++  color: inherit;
++  background: none;
++  border: 0;
++  font-size: 16px;
++  line-height: 1;
++  cursor: pointer;
++  padding: 2px 6px;
++  opacity: 0.7;
++}
++.cw-simple-results-dismiss:hover {
++  opacity: 1;
++}
++.cw-simple-results-strip {
++  display: flex;
++  flex-wrap: wrap;
++  gap: 6px;
++}
++.cw-simple-result {
++  display: flex;
++  align-items: center;
++  gap: 8px;
++  max-width: 100%;
++  padding: 6px 8px 6px 12px;
++  border: 1px solid var(--chat-border);
++  border-radius: 999px;
++  background: #ffffff0d;
++  font-size: 13px;
++}
++.cw-simple-result-title {
++  overflow: hidden;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++  max-width: 220px;
++}
++.cw-simple-result-view {
++  color: inherit;
++  background: none;
++  border: 1px solid var(--chat-border);
++  border-radius: 999px;
++  padding: 3px 10px;
++  font-size: 12px;
++  cursor: pointer;
++  white-space: nowrap;
++}
++.cw-simple-result-view:hover {
++  background: #ffffff1a;
++}
++
++/* The strip sits at the end of the assistant log: give it the log's text spacing. */
++.cw-assistant-log .cw-simple-results {
++  margin: 4px 0 12px;
++}
 diff --git a/src/canvas/workMode.ts b/src/canvas/workMode.ts
 new file mode 100644
 index 0000000..848db43
@@ -320,7 +508,7 @@ index 0000000..848db43
 +  return { mode: stored ?? "advanced", choose, dismiss, unchosen: stored === null && !dismissed } as const;
 +}
 diff --git a/src/canvas/workspace/WorkspaceView.tsx b/src/canvas/workspace/WorkspaceView.tsx
-index b8a780b..135436a 100644
+index b8a780b..9281f07 100644
 --- a/src/canvas/workspace/WorkspaceView.tsx
 +++ b/src/canvas/workspace/WorkspaceView.tsx
 @@ -49,6 +49,9 @@ import { REFERENCE_PORT_ICON_SIZE, REFERENCE_PORT_SIZE, referencePortDirection,
@@ -381,15 +569,20 @@ index b8a780b..135436a 100644
            <span ref={assetListAnchor} className="cw-asset-list-anchor">
              <IconButton
                name="search"
-@@ -2442,6 +2461,7 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
+@@ -2442,6 +2461,12 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
            key={doc.id}
            documentId={doc.id}
            documentTitle={projectDisplayName(t, doc.title, doc.defaultNameIndex)}
 +          simple={workMode === "simple"}
++          onLocateNode={(nodeId) => {
++            if (workModeState.mode === "simple") workModeState.choose("advanced");
++            const node = doc.nodes.find((item) => item.id === nodeId) ?? doc.hiddenNodes?.find((item) => item.id === nodeId);
++            if (node) requestAnimationFrame(() => selectAndFocus(node));
++          }}
            catalog={backendCatalog}
            nodes={[...doc.nodes, ...(doc.hiddenNodes ?? [])]}
            visibleNodes={doc.nodes}
-@@ -2874,6 +2894,9 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
+@@ -2874,6 +2899,9 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
              onClose={closeEditor}
            />
          )}
@@ -400,10 +593,10 @@ index b8a780b..135436a 100644
          catalog={backendCatalog}
          onSkip={() => { dismissModelSetup(); setWelcomeOpen(false); }}
 diff --git a/src/i18n/messages/en-US/canvasWorkspace.ts b/src/i18n/messages/en-US/canvasWorkspace.ts
-index e549b85..0347d66 100644
+index e549b85..94f026d 100644
 --- a/src/i18n/messages/en-US/canvasWorkspace.ts
 +++ b/src/i18n/messages/en-US/canvasWorkspace.ts
-@@ -81,6 +81,25 @@ export const canvasWorkspace = {
+@@ -81,6 +81,28 @@ export const canvasWorkspace = {
    "canvas.workspace.toolbar.undo": "Undo",
    "canvas.workspace.toolbar.redo": "Redo",
    "canvas.workspace.toolbar.help": "Help",
@@ -426,14 +619,17 @@ index e549b85..0347d66 100644
 +  "workMode.presetText.product": "A 15-second product ad: clean white backdrop, the product turning slowly, brisk pacing.",
 +  "workMode.presetText.anime": "An anime character sheet: full-body standing pose, simple palette, front view.",
 +  "workMode.presetText.city": "City night timelapse: light trails from traffic, fast-moving clouds, locked-off camera.",
++  "workMode.results.title": "This round's results",
++  "workMode.results.view": "View on canvas",
++  "workMode.results.dismiss": "Dismiss these results",
    "canvas.workspace.toolbar.chat": "Chat with AI",
  
    "canvas.workspace.empty.title": "Your story, directed by you",
 diff --git a/src/i18n/messages/zh-CN/canvasWorkspace.ts b/src/i18n/messages/zh-CN/canvasWorkspace.ts
-index 80c9a8b..90a2ad0 100644
+index 80c9a8b..bd162c2 100644
 --- a/src/i18n/messages/zh-CN/canvasWorkspace.ts
 +++ b/src/i18n/messages/zh-CN/canvasWorkspace.ts
-@@ -82,6 +82,25 @@ export const canvasWorkspace = {
+@@ -82,6 +82,28 @@ export const canvasWorkspace = {
    "canvas.workspace.toolbar.undo": "撤销",
    "canvas.workspace.toolbar.redo": "重做",
    "canvas.workspace.toolbar.help": "使用帮助",
@@ -456,6 +652,9 @@ index 80c9a8b..90a2ad0 100644
 +  "workMode.presetText.product": "为一款产品做 15 秒广告：干净的白色背景，产品缓慢旋转展示，节奏明快。",
 +  "workMode.presetText.anime": "一张动漫角色设定图：全身站姿，简洁配色，正面视角。",
 +  "workMode.presetText.city": "城市夜景延时：车流光轨，云层快速流动，镜头固定。",
++  "workMode.results.title": "本轮结果",
++  "workMode.results.view": "在画布中查看",
++  "workMode.results.dismiss": "收起本组结果",
    "canvas.workspace.toolbar.chat": "与 AI 对话",
  
    "canvas.workspace.empty.title": "你的故事，由你执导",

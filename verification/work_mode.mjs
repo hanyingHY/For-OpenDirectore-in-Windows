@@ -20,8 +20,8 @@ async function launchBrowser() {
 
 const LOCALE = process.env.LOCALE === "en-US" ? "en-US" : "zh-CN";
 const T = LOCALE === "en-US"
-  ? { saved: "Saved on this device", panel: "AI chat", editor: "Message content", send: "Send message", pick: "^Advanced mode", presets: "Presets & references", preset: "Seaside short", presetText: "A seaside short film" }
-  : { saved: "已保存到本机", panel: "AI 对话", editor: "消息内容", send: "发送消息", pick: "^进阶模式", presets: "预设与参考图", preset: "海边短片", presetText: "一段海边短片" };
+  ? { saved: "Saved on this device", panel: "AI chat", editor: "Message content", send: "Send message", pick: "^Advanced mode", presets: "Presets & references", preset: "Seaside short", presetText: "A seaside short film", addText: "Add Text", results: "This round's results", view: "View on canvas" }
+  : { saved: "已保存到本机", panel: "AI 对话", editor: "消息内容", send: "发送消息", pick: "^进阶模式", presets: "预设与参考图", preset: "海边短片", presetText: "一段海边短片", addText: "添加文本", results: "本轮结果", view: "在画布中查看" };
 const base = process.env.CREATION_WEB_URL ?? "http://127.0.0.1:5179";
 const apiUrl = process.env.CREATION_API_URL ?? "http://127.0.0.1:8019";
 const headers = { "X-OpenDirector-Request": "1", "X-OpenDirector-Session": crypto.randomUUID() };
@@ -137,6 +137,47 @@ try {
   assert.equal(await page.locator(".cw-work-mode-picker").count(), 0, "the first-run picker must not return after a choice");
   await page.waitForFunction(() => document.querySelector(".cw-workspace")?.classList.contains("cw-simple-mode"));
   assert.equal(await page.evaluate(() => localStorage.getItem("opendirector.work-mode.v1")), "simple");
+
+  // 4 · result cards (desktop.15 B'-3): a canvas change while the reply runs becomes a
+  // card when the reply completes; its view action jumps to advanced and focuses the node.
+  // A fresh conversation avoids the step-1 preset's pending composer reference, which
+  // re-routes the canvas rail into the composer instead of creating a node.
+  if (!(await editor.isVisible().catch(() => false))) {
+    await page.getByRole("button", { name: LOCALE === "en-US" ? "Chat with AI" : "与 AI 对话", exact: true }).click();
+  }
+  await editor.waitFor();
+  await panel.getByRole("button", { name: LOCALE === "en-US" ? "New conversation" : "新建会话", exact: true }).click();
+  await editor.waitFor();
+  // The pending reference survives conversations; clear it so the rail creates a node.
+  const pendingCancel = page.getByRole("button", { name: LOCALE === "en-US" ? "Cancel pending references" : "取消待插入参考", exact: true });
+  await pendingCancel.waitFor({ state: "visible", timeout: 4000 }).catch(() => {});
+  if (await pendingCancel.isVisible().catch(() => false)) await pendingCancel.click();
+  const nodesBeforeCard = await page.locator(".react-flow__node").count();
+  await api("/creation-test-assistant-gate", { open: false });
+  await editor.fill("写的时候在画布上加一个镜头");
+  await panel.getByRole("button", { name: T.send, exact: true }).click();
+  await panel.getByText("已收到创作要求。", { exact: false }).waitFor();
+  // A mid-reply doc refresh can swallow one local add; retry the rail click.
+  let created = false;
+  for (let attempt = 0; attempt < 3 && !created; attempt += 1) {
+    await page.getByRole("button", { name: T.addText, exact: true }).click();
+    try {
+      await page.waitForFunction((before) => document.querySelectorAll(".react-flow__node").length > before, nodesBeforeCard, { timeout: 4000 });
+      created = true;
+    } catch { /* the doc refresh race can swallow a mid-reply add; click again */ }
+  }
+  assert.ok(created, "the rail must create a text node during the reply");
+  await api("/creation-test-assistant-gate", { open: true });
+  await until(() => api(path, undefined, "GET"), (v) => !v.activeTurnId && v.messages.at(-1).status === "complete",
+    "the reply with a canvas change must complete");
+  const strip = panel.getByRole("region", { name: T.results, exact: true });
+  await strip.waitFor();
+  const card = strip.locator(".cw-simple-result");
+  assert.equal(await card.count(), 1, "exactly one canvas change happened during the reply");
+  await card.getByRole("button", { name: T.view, exact: true }).click();
+  await page.waitForFunction(() => !document.querySelector(".cw-workspace")?.classList.contains("cw-simple-mode"));
+  await page.waitForFunction(() => !!document.querySelector(".react-flow__node.selected"), undefined, { timeout: 15000 });
+  assert.equal(await toggle.getAttribute("aria-pressed"), "false", "the card action must land in advanced mode");
 
   // A2 · dismissal journey: a fresh context without a stored mode shows the picker again; a
   // press outside the card hides it for this session only (no preference written), and it

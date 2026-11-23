@@ -1,0 +1,152 @@
+# RFC #362 desktop.14 · A1 (Windows distribution patch, also valid upstream):
+# simple / advanced working mode.
+#
+#  * Simple mode puts the AI conversation in the centre of the canvas workspace
+#    and dims the canvas behind it (the canvas stays mounted, so running work and
+#    selections are untouched). Advanced is the unchanged canvas workflow.
+#  * The choice is a local preference (opendirector.work-mode.v1), toggled from
+#    the top bar. Switching never edits a project and never cancels a reply:
+#    verified by verification/work_mode.mjs (a reply started in simple mode
+#    completes after switching to advanced; the preference survives a reload).
+#  * Scope of this MVP: layout and focus only. Result cards, the default-preset
+#    drawer and the first-run mode picker (A2) are follow-up work.
+#
+diff --git a/src/canvas/work-mode.css b/src/canvas/work-mode.css
+new file mode 100644
+index 0000000..bc04138
+--- /dev/null
++++ b/src/canvas/work-mode.css
+@@ -0,0 +1,21 @@
++/* Simple mode (desktop.14 · A1): the conversation is the page, the canvas stays mounted behind it. */
++.cw-simple-mode .cw-side-panel {
++  display: none;
++}
++.cw-simple-mode .react-flow {
++  opacity: 0.18;
++  pointer-events: none;
++  transition: opacity 0.2s ease;
++}
++.cw-simple-mode .cw-assistant-panel {
++  left: 50%;
++  right: auto;
++  top: 78px;
++  bottom: 24px;
++  width: min(760px, calc(100% - 48px));
++  transform: translateX(-50%);
++}
++.cw-mode-toggle[aria-pressed="true"] {
++  color: var(--chat-text, inherit);
++  background: #ffffff14;
++}
+diff --git a/src/canvas/workMode.ts b/src/canvas/workMode.ts
+new file mode 100644
+index 0000000..fb58c01
+--- /dev/null
++++ b/src/canvas/workMode.ts
+@@ -0,0 +1,29 @@
++import { useEffect, useState } from "react";
++
++/**
++ * Simple / advanced working mode (desktop.14 · A1). Simple puts the AI conversation in the
++ * centre and dims the canvas; advanced is the full canvas workflow. The choice is a local
++ * preference: switching never edits the project, and a running reply keeps running.
++ */
++export type WorkMode = "simple" | "advanced";
++const KEY = "opendirector.work-mode.v1";
++
++export function readWorkMode(): WorkMode {
++  try {
++    return localStorage.getItem(KEY) === "simple" ? "simple" : "advanced";
++  } catch {
++    return "advanced";
++  }
++}
++
++export function useWorkMode() {
++  const [mode, setMode] = useState<WorkMode>(readWorkMode);
++  useEffect(() => {
++    try {
++      localStorage.setItem(KEY, mode);
++    } catch {
++      /* Keep usable without storage. */
++    }
++  }, [mode]);
++  return [mode, setMode] as const;
++}
+diff --git a/src/canvas/workspace/WorkspaceView.tsx b/src/canvas/workspace/WorkspaceView.tsx
+index b8a780b..e97a7bb 100644
+--- a/src/canvas/workspace/WorkspaceView.tsx
++++ b/src/canvas/workspace/WorkspaceView.tsx
+@@ -49,6 +49,8 @@ import { REFERENCE_PORT_ICON_SIZE, REFERENCE_PORT_SIZE, referencePortDirection,
+ import { batchCreationKinds, SELECTION_PADDING, SELECTION_PORT_SIZE } from "../selectionReferences";
+ 
+ import "../multi-selection.css";
++import "../work-mode.css";
++import { useWorkMode } from "../workMode";
+ import { CreationRipples } from "../CreationRipples.tsx";
+ import { canvasDotGrid } from "../creationRipples.ts";
+ import "../node-reference-ports.css";
+@@ -109,6 +111,7 @@ import { DirectorStage, IconButton, helpShortcuts, nodeTypes, edgeTypes, referen
+ 
+ 
+ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
++  const [workMode, setWorkMode] = useWorkMode();
+   const timelineOutput = useTimelineOutput(rt.doc.id, rt.doc.nodes, rt.notify);
+   const {
+     actionMedia,
+@@ -485,7 +488,7 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
+     <div
+       inert={!ready || switching}
+       aria-busy={!ready || switching}
+-      className={`cw-workspace${panning ? " cw-workspace-panning" : ""}${spacePressed ? " cw-workspace-space-panning" : ""}`}
++      className={`cw-workspace${panning ? " cw-workspace-panning" : ""}${spacePressed ? " cw-workspace-space-panning" : ""}${workMode === "simple" ? " cw-simple-mode" : ""}`}
+       ref={root}
+       data-testid="canvas-workspace"
+       data-desktop-sidebar={desktop && desktopSidebarOpen ? "open" : "closed"}
+@@ -1041,6 +1044,20 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
+           )}
+         </div>
+         <div className="cw-top-actions">
++        <button
++          className="cw-mode-toggle"
++          aria-pressed={workMode === "simple"}
++          onClick={() => {
++            if (workMode === "simple") {
++              setWorkMode("advanced");
++            } else {
++              setWorkMode("simple");
++              if (!assistantOpen) showAssistant();
++            }
++          }}
++        >
++          {t(workMode === "simple" ? "canvas.workspace.mode.toAdvanced" : "canvas.workspace.mode.toSimple")}
++        </button>
+           <span ref={assetListAnchor} className="cw-asset-list-anchor">
+             <IconButton
+               name="search"
+diff --git a/src/i18n/messages/en-US/canvasWorkspace.ts b/src/i18n/messages/en-US/canvasWorkspace.ts
+index e549b85..98889f2 100644
+--- a/src/i18n/messages/en-US/canvasWorkspace.ts
++++ b/src/i18n/messages/en-US/canvasWorkspace.ts
+@@ -81,6 +81,8 @@ export const canvasWorkspace = {
+   "canvas.workspace.toolbar.undo": "Undo",
+   "canvas.workspace.toolbar.redo": "Redo",
+   "canvas.workspace.toolbar.help": "Help",
++  "canvas.workspace.mode.toSimple": "Simple mode",
++  "canvas.workspace.mode.toAdvanced": "Advanced mode",
+   "canvas.workspace.toolbar.chat": "Chat with AI",
+ 
+   "canvas.workspace.empty.title": "Your story, directed by you",
+diff --git a/src/i18n/messages/zh-CN/canvasWorkspace.ts b/src/i18n/messages/zh-CN/canvasWorkspace.ts
+index 80c9a8b..91f8a0b 100644
+--- a/src/i18n/messages/zh-CN/canvasWorkspace.ts
++++ b/src/i18n/messages/zh-CN/canvasWorkspace.ts
+@@ -82,6 +82,8 @@ export const canvasWorkspace = {
+   "canvas.workspace.toolbar.undo": "撤销",
+   "canvas.workspace.toolbar.redo": "重做",
+   "canvas.workspace.toolbar.help": "使用帮助",
++  "canvas.workspace.mode.toSimple": "简洁模式",
++  "canvas.workspace.mode.toAdvanced": "进阶模式",
+   "canvas.workspace.toolbar.chat": "与 AI 对话",
+ 
+   "canvas.workspace.empty.title": "你的故事，由你执导",

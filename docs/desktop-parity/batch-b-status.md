@@ -74,3 +74,56 @@
 4. 实现 A1 结果卡片，并重录批次 B 录屏（包含结果卡片）。
 5. 确认 `dd80424c` 与 `8584cc96` 的关系（第 5 节）。
 6. 生成 desktop.14 draft 供用户评审，等待确认后才公开 Release。
+
+## 8. 交接说明（给接手的窗口）
+
+### 8.1 起点
+- 分支：`arena/1d7b4478-for-opendirectore-in-windows`，远端与本地同为 `fa61310`，工作区干净。
+- 不要切换或新建分支；所有提交都推送到当前分支。
+- 先读本文件第 3 节（未解决问题）和第 7 节（下一步）。
+
+### 8.2 关键文件
+| 路径 | 用途 |
+| --- | --- |
+| `patches/work-mode.patch` | A1/A2/预设的全部改动，接在 7 张既有补丁之后。修改源码后必须重新生成。 |
+| `verification/work_mode.mjs` | 模式旅程验证（选择框、居中、减弱、预设、回复、刷新）。`LOCALE=zh-CN\|en-US`。 |
+| `src/canvas/workMode.ts`、`WorkModePicker.tsx`、`SimplePresets.tsx`、`work-mode.css` | 上游树中的新文件（补丁内）。 |
+| `src/canvas/workspace/WorkspaceView.tsx`、`src/canvas/AssistantPanel.tsx` | 上游文件的改动点：顶部切换按钮、`simple` 属性、选择框挂载。 |
+| `docs/desktop-parity/progress.md` | 进度记录（入口）。 |
+| `delivery/desktop14-work-mode-{zh,en}.mp4` | 批次 B 录屏（尚不含结果卡片）。 |
+
+### 8.3 重新生成补丁的方法（必须遵守）
+1. 从上游 tarball 解压到 `/tmp/base`，依次应用 7 张既有补丁，并 `git init` 后提交为基线。
+2. 复制 `/tmp/src` 中的 8 个改动文件到基线副本（见 `fa61310` 之前的提交说明，或直接比对 `git show a117380 --stat`）。
+3. `git add -A && git diff --cached` 得到补丁正文，前面保留补丁头注释。
+4. 在干净基线上 `git apply --check` 通过后再提交。
+
+### 8.4 复现环境（不持久化，需要重建）
+- 运行 `verification/sandbox/setup.sh` 重建上游树、依赖与 Chromium 131。
+- Playwright 需要两条软链（沙箱重建后要重新做）：
+  - `~/.cache/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell` → `/tmp/chromium`
+  - `~/.cache/ms-playwright/ffmpeg-1011/ffmpeg-linux` → `~/bin/ffmpeg`
+- API：`python3 tests/browser/creation_server.py --port 8019 --root /tmp/opendirector-creation-<新名字>`（不带 `--assistant-fixture` 用于套件；带该参数用于 `work_mode.mjs`）。根目录必须位于系统临时目录下，名称以 `opendirector-creation-` 开头。
+- Web：Vite 在 5179，并设置 `OPENDIRECTOR_API_URL=http://127.0.0.1:8019`。
+- 环境变量：`PLAYWRIGHT_MODULE`、`BROWSER_PATH=/tmp/chromium`、`LD_LIBRARY_PATH=/tmp/libs/lib`、`CREATION_WEB_URL`、`CREATION_API_URL`。
+- 旅程脚本依赖 `tests/` 下的 `engine.mjs`（上游文件，不在本仓库）。
+
+### 8.5 已知陷阱
+- `/tmp` 内容不持久化：`/tmp/src`、`/tmp/base`、套件日志都可能丢失。
+- `/tmp/src` 不是 git 仓库时 `canvas_switch` 会失败，需先 `git init` 并提交快照。
+- 同一 API 数据根反复使用会产生 `operation_rejected` 的残留状态，每次复跑都用新根。
+- 后台启动 API 时，用 `start_process` 托管；用 `setsid nohup` 启动的进程在命令结束后可能被回收。
+- `gh run view --log-failed` 在此沙箱返回 EOF，用 `gh run view --json jobs` 代替。
+
+### 8.6 接手后的第一步
+1. 修复选择框（3.1）：移到左下角，并在选择框外按下指针时收起；重新生成补丁，中英文旅程复跑。
+2. 在全新数据根上完整复跑套件；把失败分为「A1/A2 引起」「基线也失败」两类，并记录在本文件。
+3. 诊断 `operation_rejected`（3.3）的 harness session 问题。
+4. 实现结果卡片，重录批次 B 录屏。
+5. 核对 `dd80424c` 与 `8584cc96` 的关系（第 5 节）。
+6. 生成 desktop.14 draft 供用户评审，未经确认不公开 Release。
+
+### 8.7 不要重复的尝试
+- 把选择框做成全屏遮罩（会阻断大量现有测试）。
+- 用 `page.getByText` 直接点击 `.cw-chat-button` 之外的顶部按钮（已被选择框遮挡时会超时）。
+- 为修 `operation_rejected` 而反复重启 API 而不换数据根。

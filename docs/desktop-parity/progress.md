@@ -107,3 +107,5 @@
 - Batch B reel (A1 + A2, MVP): `delivery/desktop14-work-mode-zh.mp4` (24.5 s) and `delivery/desktop14-work-mode-en.mp4` (22.2 s), recorded from `verification/work_mode.mjs` with `RECORD_DIR` and `SLOWMO=700`. Frames checked: the first-run picker shows, and a reply still runs ("思考中") after the switch to advanced. Both listed in `delivery/SHA256SUMS.txt`.
 - Simple-mode presets: a drawer above the composer with four system presets (fill the draft, editable there) and an add-reference-image button that reuses the composer's file input. `verification/work_mode.mjs` checks a preset fills the draft (zh-CN and en-US, passing).
 - Open: `operation_rejected` in `created_node_focus` and `editor_save`. The real reason is `_lease` in `creation_projects.py`: no live write lease for the test's session at write time (lease 60 s, heartbeat 15 s). Reproduced on the unpatched baseline. Likely a harness session mismatch; not fixed.
+
+- 详细状态（已完成、未解决问题、下一步）见 `docs/desktop-parity/batch-b-status.md`。

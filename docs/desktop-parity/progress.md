@@ -109,3 +109,27 @@
 - Open: `operation_rejected` in `created_node_focus` and `editor_save`. The real reason is `_lease` in `creation_projects.py`: no live write lease for the test's session at write time (lease 60 s, heartbeat 15 s). Reproduced on the unpatched baseline. Likely a harness session mismatch; not fixed.
 
 - 详细状态（已完成、未解决问题、下一步）见 `docs/desktop-parity/batch-b-status.md`。
+
+## desktop.15 · Batch C' · Taskbar progress + completion flash (C6/C5-lite), export fallback copy (C11)
+
+- Host.cs: `ITaskbarList3` COM interop (vtable order matches the shell interface; CLSID 56FDF344-FD6D-11d0-958A-006097C9A090). A 1 s WinForms-timer poll reads the same host contract the exit confirm uses (`data-od-exporting` attribute + `.cw-render-status progress` fallback, probe JS returns `'0' / '1' / '2 <percent>'`) per open WebView and maps it to TBPF_NOPROGRESS / INDETERMINATE / NORMAL+SetProgressValue. Polling runs on the UI thread, stops itself while a tick is in flight, and survives Explorer restarts and disposing views.
+- C5-lite: a busy→idle edge flashes the taskbar entry (`FLASHW_ALL|FLASHW_TIMERNOFGO`) while the window is not foreground — leaving a long render is now safe. A native toast stays follow-up (needs WinRT AppUserModelID plumbing).
+- smoke.ps1 asserts on the windows-2022 runner that `Taskbar progress enabled` was logged and no `Taskbar sync:` error appeared.
+- C11 (S layer): `patches/export-fallback-copy.patch` extends the mp4H264 failure copy with the fallback that keeps the timeline (Export JSON / editable bundle), zh-CN + en-US; wired into package.py, both canvas.yml apply lines and the static guard.
+- Commit 35148e1. C# compile verification happens on the windows-2022 runner (mono unavailable in the sandbox).
+
+## desktop.15 · Batch D' · Agent plan/build execution modes (A3, server-enforced)
+
+- A plan run can never change project state: enforcement lives at the single choke point every built-in runtime passes through (`ToolGateway` → `AgentTools.execute`), keyed on the new `RunContext.mode` ('plan'|'build', default build). `execute_command` with a canvas/generation/asset command, `timeline_package_import`, `voice_create`, `voice_delete` are refused for plan runs (403, code `plan_readonly`); queries and package exports stay allowed so a plan can inspect state.
+- API Turn/Draft payloads accept `mode`, persist it on user and assistant messages, thread it into the RunContext; the API localizes the refusal for direct HTTP clients (ENGLISH_BY_CODE `plan_readonly`), the web UI maps the same Chinese detail via `assistantToolText` (`assistant.reply.toolPlanReadonly`).
+- Composer toolbar gains a Plan/Build radiogroup (aria-checked, disabled while sending); a plan turn's user message carries a Plan badge (`cw-assistant-plan-badge`).
+- Browser fixture refuses an armed write through the real ToolGateway (`assistantModes`/`planRefusals` in creation-test-health) so the journey proves the server side end-to-end.
+- Verified: `verification/agent_plan_mode.mjs` zh+en PASS (modes [build,build,plan,build], refusal code plan_readonly, armed writes unchanged, badge on the plan turn only); `work_mode.mjs` zh+en regression PASS; build ok; tsc clean; i18n 3294 keys / 0 problems; `tests/test_agent_plan_mode.py` pins the enforcement point (34 unittests OK).
+- Suite re-run after a clean Vite restart: **24/24 PASS** (capability discovery and timeline node output included — earlier failures were long-run dev-server state, not regressions; the stash-to-B'-2 baseline reproduced them, the restart fixed them).
+- Commits ad53ed6 (code) + 5941a16 (reel). Reel: `delivery/desktop15-agent-mode-zh.mp4` (571 frames, 24.0 s) and `-en.mp4` (573 frames, 23.9 s), H.264, SHA256SUMS updated.
+
+## desktop.15 · Full journey reel + release prep
+
+- `verification/desktop15_full_reel.mjs`: nine chapters on one continuous capture — work-mode first-run picker → text node + real upload → simple-mode presets with a mid-reply switch back to advanced → result card + "View on canvas" → agent plan/build with the real refusal → timeline package import → real H.264 render with `data-od-exporting` → failure card exits + Escape → bilingual close. **PASS**: `delivery/desktop15-full-journey.mp4`, 2754 frames, 116.8 s, 3.53 MB, video/mp4;codecs=avc1 (ffmpeg libx264), SHA256SUMS updated. Commit 3e3bd30.
+- desktop/VERSION bumped to `0.1.5-desktop.15` (ca59a91); the Windows x64 desktop workflow builds the installer artifact for the draft release.
+- Pending: draft release `v0.1.5-desktop.15` (installer + SHA-256 + signing status / SmartScreen note); publishing it publicly needs the user's confirmation.

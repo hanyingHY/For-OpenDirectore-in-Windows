@@ -123,10 +123,10 @@ index 0000000..2c7d818
 +}
 diff --git a/src/canvas/WorkModePicker.tsx b/src/canvas/WorkModePicker.tsx
 new file mode 100644
-index 0000000..0b0f9c1
+index 0000000..df586d3
 --- /dev/null
 +++ b/src/canvas/WorkModePicker.tsx
-@@ -0,0 +1,45 @@
+@@ -0,0 +1,47 @@
 +import { useEffect, useRef } from "react";
 +import { useI18n } from "../i18n/I18nProvider";
 +import type { WorkMode } from "./workMode";
@@ -140,17 +140,19 @@ index 0000000..0b0f9c1
 +  const { t } = useI18n();
 +  const cardRef = useRef<HTMLElement | null>(null);
 +  useEffect(() => {
++    // Capture phase: the canvas workspace stops pointer-event propagation for its
++    // own panning logic, so a bubble-phase listener would miss presses on nodes.
 +    const onPointerDown = (event: PointerEvent) => {
 +      if (cardRef.current && event.target instanceof Node && !cardRef.current.contains(event.target)) onDismiss();
 +    };
 +    const onKeyDown = (event: KeyboardEvent) => {
 +      if (event.key === "Escape") onDismiss();
 +    };
-+    document.addEventListener("pointerdown", onPointerDown);
-+    document.addEventListener("keydown", onKeyDown);
++    document.addEventListener("pointerdown", onPointerDown, true);
++    document.addEventListener("keydown", onKeyDown, true);
 +    return () => {
-+      document.removeEventListener("pointerdown", onPointerDown);
-+      document.removeEventListener("keydown", onKeyDown);
++      document.removeEventListener("pointerdown", onPointerDown, true);
++      document.removeEventListener("keydown", onKeyDown, true);
 +    };
 +  }, [onDismiss]);
 +  return (

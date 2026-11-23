@@ -1,6 +1,7 @@
 /** desktop.14 · A1 简洁/进阶模式旅程（verification/work_mode.mjs）。
  * 运行前需先启动隔离 API：creation_server.py --assistant-fixture --root <opendirector-creation-*>，以及 Vite 5179。
- * 环境变量：CREATION_WEB_URL、CREATION_API_URL、LOCALE（zh-CN|en-US，默认 zh-CN）。
+ * 环境变量：CREATION_WEB_URL、CREATION_API_URL、LOCALE（zh-CN|en-US，默认 zh-CN）；
+ * 录制用：RECORD_DIR（输出 webm 目录）、SLOWMO（毫秒，放慢操作便于观看）。
  * 1) 默认进阶；切到简洁：对话居中、侧栏隐藏、画布减弱且不可点击。
  * 2) 回复进行中切回进阶：运行中的回复不中断，完成后写入结果保留。
  * 3) 再切到简洁并刷新：偏好保持。 */
@@ -11,6 +12,7 @@ async function launchBrowser() {
   const executablePath = process.env.BROWSER_PATH;
   return playwright.chromium.launch({
     headless: true,
+    ...(process.env.SLOWMO ? { slowMo: Number(process.env.SLOWMO) } : {}),
     ...(executablePath ? { executablePath } : {}),
     args: ["--no-sandbox", "--disable-dev-shm-usage"],
   });
@@ -50,7 +52,11 @@ const path = `/creation/projects/${projectId}/assistant`;
 
 const browser = await launchBrowser();
 try {
-  const context = await browser.newContext({ locale: LOCALE, viewport: { width: 1440, height: 900 } });
+  const context = await browser.newContext({
+    locale: LOCALE,
+    viewport: { width: 1440, height: 900 },
+    ...(process.env.RECORD_DIR ? { recordVideo: { dir: process.env.RECORD_DIR, size: { width: 1440, height: 900 } } } : {}),
+  });
   await context.addInitScript(([id, loc]) => {
     if (!sessionStorage.getItem("od-mode-seeded")) {
       localStorage.removeItem("opendirector.work-mode.v1");

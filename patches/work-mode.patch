@@ -11,9 +11,113 @@
 #  * First run (A2): a non-modal picker appears once, after the model-setup
 #    welcome is dismissed and only while no mode has been chosen. Either
 #    choice is saved and changeable from the top bar.
-#  * Scope: layout and focus only. Result cards and the default-preset drawer
-#    are follow-up work.
+#  * Simple mode presets (A1): a drawer above the composer offers four system
+#    presets that fill the draft (editable there) and a reference-image button
+#    that reuses the composer's existing file input.
+#  * Scope: result cards are follow-up work.
 #
+diff --git a/src/canvas/AssistantPanel.tsx b/src/canvas/AssistantPanel.tsx
+index 70bb8f5..7bbc90d 100644
+--- a/src/canvas/AssistantPanel.tsx
++++ b/src/canvas/AssistantPanel.tsx
+@@ -8,6 +8,7 @@ import { loadReferenceCatalog } from "../backend/referenceCatalog.ts";
+ import "./assistant-panel.css";
+ import "./assistant-experience.css";
+ import { AttachmentStrip, AttachmentHover } from "./AssistantMedia";
++import { SimplePresetDrawer, draftWithPreset } from "./SimplePresets";
+ import { AssistantReply } from "./AssistantReply";
+ import { AssistantConversations } from "./AssistantConversations";
+ import { AgentPicker } from "./AgentPicker";
+@@ -68,9 +69,11 @@ export function AssistantPanel({
+   onModelSelections,
+   onOpenSettings,
+   onPrepareReferences,
++  simple = false,
+ }: {
+   documentId: string;
+   documentTitle: string;
++  simple?: boolean;
+   catalog: BackendModels;
+   nodes: CanvasNode[];
+   visibleNodes: CanvasNode[];
+@@ -501,6 +504,14 @@ export function AssistantPanel({
+         })}
+       </div>
+       <div className="cw-assistant-composer-area">
++        {simple && (
++          <SimplePresetDrawer
++            onPreset={(text) =>
++              setValue((previous) => ({ ...previous, draft: text, draftContent: draftWithPreset(previous.draftContent, text) }))
++            }
++            onReferences={() => fileInput.current?.click()}
++          />
++        )}
+         {chat.error && (
+           <div className="cw-assistant-error" role="alert">
+             <span>{chat.error}</span>
+diff --git a/src/canvas/SimplePresets.tsx b/src/canvas/SimplePresets.tsx
+new file mode 100644
+index 0000000..2c7d818
+--- /dev/null
++++ b/src/canvas/SimplePresets.tsx
+@@ -0,0 +1,57 @@
++import { useState } from "react";
++import { useI18n } from "../i18n/I18nProvider";
++import type { ReferenceContent } from "./chatReferenceContent";
++
++/** System presets for simple mode (desktop.14 · A1). A preset fills the composer draft; the user edits it there. */
++export const systemPresets = [
++  { id: "seaside", name: "workMode.preset.seaside", text: "workMode.presetText.seaside" },
++  { id: "product", name: "workMode.preset.product", text: "workMode.presetText.product" },
++  { id: "anime", name: "workMode.preset.anime", text: "workMode.presetText.anime" },
++  { id: "city", name: "workMode.preset.city", text: "workMode.presetText.city" },
++] as const;
++
++/** Keep non-text parts (references, skills) when a preset replaces the text. */
++export function draftWithPreset(content: ReferenceContent | null | undefined, text: string): ReferenceContent {
++  const rest = (content ?? []).filter((part) => part.type !== "text");
++  return [{ type: "text", text }, ...rest];
++}
++
++export function SimplePresetDrawer({ onPreset, onReferences }: {
++  onPreset: (text: string) => void;
++  onReferences: () => void;
++}) {
++  const { t } = useI18n();
++  const [open, setOpen] = useState(false);
++  return (
++    <div className="cw-simple-presets">
++      <button
++        type="button"
++        className="cw-simple-presets-toggle"
++        aria-expanded={open}
++        aria-controls="cw-simple-presets-drawer"
++        onClick={() => setOpen(!open)}
++      >
++        {t("workMode.presets.open")}
++      </button>
++      {open && (
++        <div className="cw-simple-presets-drawer" id="cw-simple-presets-drawer">
++          <div className="cw-simple-presets-list" role="group" aria-label={t("workMode.presets.title")}>
++            {systemPresets.map((preset) => (
++              <button
++                key={preset.id}
++                type="button"
++                className="cw-simple-preset"
++                onClick={() => onPreset(t(preset.text as never))}
++              >
++                {t(preset.name as never)}
++              </button>
++            ))}
++          </div>
++          <button type="button" className="cw-simple-presets-reference" onClick={onReferences}>
++            {t("workMode.presets.references")}
++          </button>
++        </div>
++      )}
++    </div>
++  );
++}
 diff --git a/src/canvas/WorkModePicker.tsx b/src/canvas/WorkModePicker.tsx
 new file mode 100644
 index 0000000..d5bc17f
@@ -48,10 +152,10 @@ index 0000000..d5bc17f
 +}
 diff --git a/src/canvas/work-mode.css b/src/canvas/work-mode.css
 new file mode 100644
-index 0000000..faab7dc
+index 0000000..3ab5393
 --- /dev/null
 +++ b/src/canvas/work-mode.css
-@@ -0,0 +1,69 @@
+@@ -0,0 +1,95 @@
 +/* Simple mode (desktop.14 · A1): the conversation is the page, the canvas stays mounted behind it. */
 +.cw-simple-mode .cw-side-panel {
 +  display: none;
@@ -121,6 +225,32 @@ index 0000000..faab7dc
 +  font-size: 13px;
 +  opacity: 0.75;
 +}
++.cw-simple-presets {
++  display: grid;
++  gap: 8px;
++  padding: 0 14px 8px;
++}
++.cw-simple-presets-toggle,
++.cw-simple-presets-reference,
++.cw-simple-preset {
++  color: inherit;
++  background: #ffffff0d;
++  border: 1px solid var(--chat-border);
++  border-radius: 999px;
++  padding: 5px 12px;
++  font-size: 13px;
++  cursor: pointer;
++  justify-self: start;
++}
++.cw-simple-presets-drawer {
++  display: grid;
++  gap: 8px;
++}
++.cw-simple-presets-list {
++  display: flex;
++  flex-wrap: wrap;
++  gap: 6px;
++}
 diff --git a/src/canvas/workMode.ts b/src/canvas/workMode.ts
 new file mode 100644
 index 0000000..c9b7d32
@@ -160,7 +290,7 @@ index 0000000..c9b7d32
 +  return { mode: stored ?? "advanced", choose, unchosen: stored === null } as const;
 +}
 diff --git a/src/canvas/workspace/WorkspaceView.tsx b/src/canvas/workspace/WorkspaceView.tsx
-index b8a780b..f0cc9e8 100644
+index b8a780b..f98687f 100644
 --- a/src/canvas/workspace/WorkspaceView.tsx
 +++ b/src/canvas/workspace/WorkspaceView.tsx
 @@ -49,6 +49,9 @@ import { REFERENCE_PORT_ICON_SIZE, REFERENCE_PORT_SIZE, referencePortDirection,
@@ -221,7 +351,15 @@ index b8a780b..f0cc9e8 100644
            <span ref={assetListAnchor} className="cw-asset-list-anchor">
              <IconButton
                name="search"
-@@ -2874,6 +2893,9 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
+@@ -2442,6 +2461,7 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
+           key={doc.id}
+           documentId={doc.id}
+           documentTitle={projectDisplayName(t, doc.title, doc.defaultNameIndex)}
++          simple={workMode === "simple"}
+           catalog={backendCatalog}
+           nodes={[...doc.nodes, ...(doc.hiddenNodes ?? [])]}
+           visibleNodes={doc.nodes}
+@@ -2874,6 +2894,9 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
              onClose={closeEditor}
            />
          )}
@@ -232,10 +370,10 @@ index b8a780b..f0cc9e8 100644
          catalog={backendCatalog}
          onSkip={() => { dismissModelSetup(); setWelcomeOpen(false); }}
 diff --git a/src/i18n/messages/en-US/canvasWorkspace.ts b/src/i18n/messages/en-US/canvasWorkspace.ts
-index e549b85..c0580d4 100644
+index e549b85..0347d66 100644
 --- a/src/i18n/messages/en-US/canvasWorkspace.ts
 +++ b/src/i18n/messages/en-US/canvasWorkspace.ts
-@@ -81,6 +81,14 @@ export const canvasWorkspace = {
+@@ -81,6 +81,25 @@ export const canvasWorkspace = {
    "canvas.workspace.toolbar.undo": "Undo",
    "canvas.workspace.toolbar.redo": "Redo",
    "canvas.workspace.toolbar.help": "Help",
@@ -247,14 +385,25 @@ index e549b85..c0580d4 100644
 +  "workMode.picker.simpleHint": "Conversation in the centre, start from one sentence.",
 +  "workMode.picker.advanced": "Advanced mode",
 +  "workMode.picker.advancedHint": "Full canvas, nodes and timeline.",
++  "workMode.presets.open": "Presets & references",
++  "workMode.presets.title": "System presets",
++  "workMode.presets.references": "Add reference image",
++  "workMode.preset.seaside": "Seaside short",
++  "workMode.preset.product": "Product ad",
++  "workMode.preset.anime": "Anime character",
++  "workMode.preset.city": "City timelapse",
++  "workMode.presetText.seaside": "A seaside short film: a quiet beach at dawn, waves brushing the sand, a slow push-in shot.",
++  "workMode.presetText.product": "A 15-second product ad: clean white backdrop, the product turning slowly, brisk pacing.",
++  "workMode.presetText.anime": "An anime character sheet: full-body standing pose, simple palette, front view.",
++  "workMode.presetText.city": "City night timelapse: light trails from traffic, fast-moving clouds, locked-off camera.",
    "canvas.workspace.toolbar.chat": "Chat with AI",
  
    "canvas.workspace.empty.title": "Your story, directed by you",
 diff --git a/src/i18n/messages/zh-CN/canvasWorkspace.ts b/src/i18n/messages/zh-CN/canvasWorkspace.ts
-index 80c9a8b..3d7f117 100644
+index 80c9a8b..90a2ad0 100644
 --- a/src/i18n/messages/zh-CN/canvasWorkspace.ts
 +++ b/src/i18n/messages/zh-CN/canvasWorkspace.ts
-@@ -82,6 +82,14 @@ export const canvasWorkspace = {
+@@ -82,6 +82,25 @@ export const canvasWorkspace = {
    "canvas.workspace.toolbar.undo": "撤销",
    "canvas.workspace.toolbar.redo": "重做",
    "canvas.workspace.toolbar.help": "使用帮助",
@@ -266,6 +415,17 @@ index 80c9a8b..3d7f117 100644
 +  "workMode.picker.simpleHint": "对话居中，适合从一句话开始创作。",
 +  "workMode.picker.advanced": "进阶模式",
 +  "workMode.picker.advancedHint": "完整画布、节点与时间线。",
++  "workMode.presets.open": "预设与参考图",
++  "workMode.presets.title": "系统预设",
++  "workMode.presets.references": "添加参考图",
++  "workMode.preset.seaside": "海边短片",
++  "workMode.preset.product": "产品广告",
++  "workMode.preset.anime": "动漫角色",
++  "workMode.preset.city": "城市延时",
++  "workMode.presetText.seaside": "一段海边短片：清晨的海滩，海浪轻拍沙滩，镜头缓慢推进。",
++  "workMode.presetText.product": "为一款产品做 15 秒广告：干净的白色背景，产品缓慢旋转展示，节奏明快。",
++  "workMode.presetText.anime": "一张动漫角色设定图：全身站姿，简洁配色，正面视角。",
++  "workMode.presetText.city": "城市夜景延时：车流光轨，云层快速流动，镜头固定。",
    "canvas.workspace.toolbar.chat": "与 AI 对话",
  
    "canvas.workspace.empty.title": "你的故事，由你执导",

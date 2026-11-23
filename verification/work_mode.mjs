@@ -20,8 +20,8 @@ async function launchBrowser() {
 
 const LOCALE = process.env.LOCALE === "en-US" ? "en-US" : "zh-CN";
 const T = LOCALE === "en-US"
-  ? { saved: "Saved on this device", panel: "AI chat", editor: "Message content", send: "Send message", pick: "^Advanced mode" }
-  : { saved: "已保存到本机", panel: "AI 对话", editor: "消息内容", send: "发送消息", pick: "^进阶模式" };
+  ? { saved: "Saved on this device", panel: "AI chat", editor: "Message content", send: "Send message", pick: "^Advanced mode", presets: "Presets & references", preset: "Seaside short", presetText: "A seaside short film" }
+  : { saved: "已保存到本机", panel: "AI 对话", editor: "消息内容", send: "发送消息", pick: "^进阶模式", presets: "预设与参考图", preset: "海边短片", presetText: "一段海边短片" };
 const base = process.env.CREATION_WEB_URL ?? "http://127.0.0.1:5179";
 const apiUrl = process.env.CREATION_API_URL ?? "http://127.0.0.1:8019";
 const headers = { "X-OpenDirector-Request": "1", "X-OpenDirector-Session": crypto.randomUUID() };
@@ -94,6 +94,10 @@ try {
   await page.waitForFunction(() => document.querySelector(".cw-workspace")?.classList.contains("cw-simple-mode"));
   assert.equal(await toggle.getAttribute("aria-pressed"), "true");
   await editor.waitFor();
+  // A2 · simple mode presets (desktop.14): a system preset fills the composer draft.
+  await panel.getByRole("button", { name: T.presets, exact: true }).click();
+  await panel.getByRole("button", { name: T.preset, exact: true }).click();
+  await page.waitForFunction((text) => document.querySelector(".cw-assistant-composer-area")?.textContent?.includes(text), T.presetText);
   const box = await panel.boundingBox();
   const viewport = page.viewportSize();
   assert.ok(Math.abs(box.x + box.width / 2 - viewport.width / 2) < 4, `panel must be centred: ${JSON.stringify(box)}`);

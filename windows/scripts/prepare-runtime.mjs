@@ -82,7 +82,7 @@ if (process.platform === 'win32') {
 } else {
   writeFileSync(join(runtime, 'bin/opendirector'),
     `#!/bin/sh\nset -eu\nRUNTIME=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)\n` +
-    `export PATH="$RUNTIME/bin:$PATH"\nexport OPENDIRECTOR_ROOT="${OPENDIRECTOR_ROOT:-$HOME/.config/OpenDirector/workspace}"\n` +
+    `export PATH="$RUNTIME/bin:$PATH"\nexport OPENDIRECTOR_ROOT="\${OPENDIRECTOR_ROOT:-$HOME/.config/OpenDirector/workspace}"\n` +
     `exec "$RUNTIME/${pythonRelative}" -I -B -m opendirector.cli "$@"\n`);
   chmodSync(join(runtime, 'bin/opendirector'), 0o755);
 }

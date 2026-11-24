@@ -27,19 +27,37 @@ jobs:
       - name: Unit tests
         run: npm test
 
-      - name: Prepare runtime cache
+      - name: Vendor upstream tree
         shell: bash
         working-directory: .
         env:
           OPENDIRECTOR_REF: 8258d4b016496d81a7c824e4cdfa42f3c840d5eb
+        run: bash scripts/vendor-upstream.sh
+
+      - name: Install uv
+        shell: bash
+        working-directory: .
         run: |
-          bash scripts/vendor-upstream.sh
+          (command -v uv && uv --version) || true
           command -v uv >/dev/null 2>&1 || python -m pip install --quiet uv
+          uv --version
+
+      - name: Fetch ffmpeg runtime
+        shell: bash
+        working-directory: .
+        run: |
           mkdir -p _ffmpeg _ffbin
           curl -sSL -o _ffmpeg/ffmpeg.zip "https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip"
+          ls -la _ffmpeg/
           powershell -c "Expand-Archive -Force -Path _ffmpeg/ffmpeg.zip -DestinationPath _ffmpeg/out"
+          find _ffmpeg/out -name "ffmpeg.exe" -o -name "ffprobe.exe"
           cp "$(find _ffmpeg/out -name ffmpeg.exe | head -1)" _ffbin/
           cp "$(find _ffmpeg/out -name ffprobe.exe | head -1)" _ffbin/
+
+      - name: Prepare runtime cache
+        shell: bash
+        working-directory: .
+        run: |
           export OPENDIRECTOR_FFMPEG_DIR="$PWD/_ffbin"
           node windows/scripts/prepare-runtime.mjs
 

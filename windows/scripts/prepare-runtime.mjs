@@ -60,7 +60,7 @@ mkdirSync(wheels, { recursive: true });
 run('uv', ['build', '--wheel', '--out-dir', wheels]);
 const wheel = readdirSync(wheels).find(name => name.startsWith('opendirector-') && name.endsWith('.whl'));
 if (!wheel) throw new Error('OpenDirector wheel was not produced');
-run('uv', ['pip', 'install', '--reinstall-package', 'opendirector', '--python', python, join(wheels, wheel)]);
+run('uv', ['pip', 'install', '--break-system-packages', '--reinstall-package', 'opendirector', '--python', python, join(wheels, wheel)]);
 
 for (const name of ['ffmpeg', 'ffprobe']) {
   const executable = name + (process.platform === 'win32' ? '.exe' : '');

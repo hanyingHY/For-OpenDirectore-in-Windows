@@ -115,11 +115,12 @@ export async function runFullJourney(director, { web, api = 'http://127.0.0.1:80
       await templateApply.click();
       await director.wait(1200);
       await director.frame('template applied');
-      await director.caption('Nodes, drafts and reference wiring land together / 节点、草稿与参考连线一体生成', { frames: 2, holdMs: 800 });
+      await director.caption('Nodes, drafts and reference wiring land together — one undo reverts it all / 节点、草稿与参考连线一体生成，一次撤销全部还原', { frames: 2, holdMs: 800 });
       await page.mouse.click(80, 950);
       await director.key('Control+z');
       await director.wait(900);
       await director.frame('template undone');
+      await director.hideCaption();
     }
 
     // Tool rail tour.

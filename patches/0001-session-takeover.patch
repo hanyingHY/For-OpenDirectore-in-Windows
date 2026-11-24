@@ -1,0 +1,162 @@
+--- a/packages/core/src/opendirector/infrastructure/local_projects.py
++++ b/packages/core/src/opendirector/infrastructure/local_projects.py
+@@ -119,10 +119,14 @@
+                 raise ProjectError("该位置已有同名文件或文件夹，请使用其他名称。", 409)
+ 
+ 
+-    def _open(self, db, project: dict, session: str):
++    def _open(self, db, project: dict, session: str, takeover: bool = False):
+         identifier(session)
+         project_id = project["id"]
+-        if db.execute("SELECT 1 FROM sessions WHERE project_id=? AND id<>? AND expires>?", (project_id, session, time.time())).fetchone():
++        if takeover:
++            # Dead-window recovery: the caller explicitly replaces every other
++            # lease on this project (the UI warns before this runs).
++            db.execute("DELETE FROM sessions WHERE project_id=? AND id<>?", (project_id, session))
++        elif db.execute("SELECT 1 FROM sessions WHERE project_id=? AND id<>? AND expires>?", (project_id, session, time.time())).fetchone():
+             raise ProjectError("该项目正在其他窗口中打开，请先关闭后再试。", 409, code="project_open_elsewhere")
+         lease = db.execute("SELECT path FROM sessions WHERE id=? AND project_id=? AND expires>?", (session, project_id, time.time())).fetchone()
+         if lease and lease["path"] != project["path"]:
+--- a/packages/core/src/opendirector/infrastructure/creation_projects.py
++++ b/packages/core/src/opendirector/infrastructure/creation_projects.py
+@@ -120,11 +120,11 @@
+                 return ViewState.model_validate(read_json(file))
+             return None if missing_ok else ViewState(projectId=project_id, clientId=client_id)
+ 
+-    def open(self, project_id, session):
++    def open(self, project_id, session, *, takeover=False):
+         with self.local.transaction() as db:
+             self._recover()
+             path, manifest = self._find(db, project_id)
+-            self.local._open(db, dict(id=str(project_id), path=str(path)), session)
++            self.local._open(db, dict(id=str(project_id), path=str(path)), session, takeover=takeover)
+             record, validated = self._current_record(db, project_id, path, manifest)
+             if not validated:
+                 # The canvas is open now; prove the ancestry in the background
+--- a/apps/api/src/opendirector_api/creation.py
++++ b/apps/api/src/opendirector_api/creation.py
+@@ -112,6 +112,13 @@
+         snapshot = projects.open(project_id, str(x_opendirector_session))
+         return {'snapshot': snapshot, 'edges': canvas.reference_edges(project_id, snapshot)}
+ 
++    @router.post('/projects/{project_id}/takeover', response_model=ProjectSnapshot)
++    def take_over_project(project_id: UUID, x_opendirector_session: UUID = Header()):
++        # Dead-window recovery: replace every other session's lease on this
++        # project with the caller's. The UI only offers this from the lock
++        # screen and warns that the other window loses its editing session.
++        return projects.open(project_id, str(x_opendirector_session), takeover=True)
++
+     @router.put('/sessions/{session_id}')
+     def heartbeat(session_id: UUID, value: Session):
+         projects.heartbeat(str(session_id), value.projectId)
+--- a/src/canvas/workspace/state.ts
++++ b/src/canvas/workspace/state.ts
+@@ -85,6 +85,7 @@
+   ready: boolean;
+   pageVisible: boolean;
+   initializationError: string;
++  initializationErrorCode: string;
+   editProjectNameId: string | null;
+   projectRenaming: boolean;
+   switching: boolean;
+@@ -155,6 +156,7 @@
+   "ready",
+   "pageVisible",
+   "initializationError",
++  "initializationErrorCode",
+   "editProjectNameId",
+   "projectRenaming",
+   "switching",
+@@ -216,6 +218,7 @@
+     ready: false,
+     pageVisible: typeof document === "undefined" ? true : !document.hidden,
+     initializationError: "",
++    initializationErrorCode: "",
+     editProjectNameId: null,
+     projectRenaming: false,
+     switching: false,
+--- a/src/canvas/workspace/useWorkspaceDocument.ts
++++ b/src/canvas/workspace/useWorkspaceDocument.ts
+@@ -59,6 +59,7 @@
+     setHistory,
+     setHistoryReplaying,
+     setInitializationError,
++    setInitializationErrorCode,
+     setInteracting,
+     setMeasurements,
+     setMenu,
+@@ -489,7 +490,14 @@
+         installDocument(document);
+         setReady(true);
+       } catch (error) {
+-        if (alive) setInitializationError(errorMessage(error));
++        if (alive) {
++          setInitializationError(errorMessage(error));
++          setInitializationErrorCode(
++            typeof error === "object" && error !== null && "code" in error
++              ? String((error as { code: unknown }).code)
++              : "",
++          );
++        }
+       }
+     };
+     void init();
+--- a/src/canvas/workspace/WorkspaceView.tsx
++++ b/src/canvas/workspace/WorkspaceView.tsx
+@@ -192,6 +192,7 @@
+     importInput,
+     importLibrarySubjects,
+     initializationError,
++    initializationErrorCode,
+     insertLibraryItems,
+     installDocument,
+     interacting,
+@@ -3071,6 +3072,24 @@
+           {initializationError ? (
+             <div role="alert">
+               <p>{initializationError}</p>
++              {initializationErrorCode === "project_open_elsewhere" && (
++                <>
++                  <p>{t("canvas.workspace.loading.takeoverHint")}</p>
++                  <button
++                    data-testid="project-takeover"
++                    onClick={async () => {
++                      try {
++                        await apiRequest(`/creation/projects/${doc.id}/takeover`, { method: "POST" });
++                        window.location.reload();
++                      } catch (error) {
++                        window.alert(errorMessage(error));
++                      }
++                    }}
++                  >
++                    {t("canvas.workspace.loading.takeover")}
++                  </button>
++                </>
++              )}
+               <button onClick={() => window.location.reload()}>{t("canvas.workspace.loading.reconnect")}</button>
+               <a href="/">{t("canvas.workspace.loading.backHome")}</a>
+             </div>
+--- a/src/i18n/messages/en-US/canvasWorkspace.ts
++++ b/src/i18n/messages/en-US/canvasWorkspace.ts
+@@ -94,6 +94,9 @@
+   "canvas.workspace.loading.switching": "Switching canvas…",
+   "canvas.workspace.loading.reconnect": "Reconnect",
+   "canvas.workspace.loading.backHome": "Back to canvas home",
++  "canvas.workspace.loading.takeover": "Take over the project",
++  "canvas.workspace.loading.takeoverHint":
++    "The other window may have closed unexpectedly. Taking over releases its editing session; unsaved changes in that window are lost.",
+ 
+   "canvas.workspace.selection.edgesSelected": {
+     one: "Selected {count} connection",
+--- a/src/i18n/messages/zh-CN/canvasWorkspace.ts
++++ b/src/i18n/messages/zh-CN/canvasWorkspace.ts
+@@ -93,6 +93,9 @@
+   "canvas.workspace.loading.switching": "正在切换画布…",
+   "canvas.workspace.loading.reconnect": "重新连接",
+   "canvas.workspace.loading.backHome": "返回画布首页",
++  "canvas.workspace.loading.takeover": "接管项目",
++  "canvas.workspace.loading.takeoverHint":
++    "对方窗口可能已意外关闭。接管将释放其编辑会话，该窗口中未保存的修改会丢失。",
+ 
+   "canvas.workspace.selection.edgesSelected": {
+     one: "已选 {count} 条连线",

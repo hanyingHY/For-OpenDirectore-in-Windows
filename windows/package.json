@@ -1,0 +1,88 @@
+{
+  "name": "opendirector-windows",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "OpenDirector Windows desktop app — the flagship Windows experience for ThinkFlowLab/OpenDirector",
+  "main": "src/main.mjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/*.test.mjs",
+    "prepare:runtime": "node scripts/prepare-runtime.mjs",
+    "pack": "electron-builder --win nsis --x64",
+    "pack:dir": "electron-builder --win dir --x64",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "dependencies": {
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "electron": "45.3.3",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "org.opendirector.desktop",
+    "productName": "OpenDirector",
+    "artifactName": "OpenDirector-v${version}-win-${arch}.${ext}",
+    "asar": true,
+    "directories": {
+      "output": "build"
+    },
+    "files": [
+      "src/**",
+      "assets/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "runtime",
+        "to": "runtime"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/open-director.ico",
+      "verifyUpdateCodeSignature": false
+    },
+    "nsis": {
+      "artifactName": "OpenDirector-v${version}-win-${arch}-setup.${ext}",
+      "deleteAppDataOnUninstall": false,
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "OpenDirector",
+      "runAfterFinish": true,
+      "include": "installer/installer.nsh",
+      "license": "../LICENSE"
+    },
+    "fileAssociations": [
+      {
+        "ext": "odcanvas",
+        "name": "OpenDirector Canvas",
+        "description": "OpenDirector canvas archive",
+        "role": "Editor",
+        "icon": "assets/open-director.ico"
+      }
+    ],
+    "protocols": [
+      {
+        "name": "OpenDirector",
+        "schemes": ["opendirector"]
+      }
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "hanyingHY",
+      "repo": "For-OpenDirectore-in-Windows",
+      "releaseType": "release"
+    }
+  }
+}

@@ -1,0 +1,12 @@
+# Build outputs and vendored upstream snapshot (fetched by scripts/vendor-upstream.sh)
+build/
+demo/
+*.mp4
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+.runtime-cache/
+*.log
+.DS_Store
+Thumbs.db

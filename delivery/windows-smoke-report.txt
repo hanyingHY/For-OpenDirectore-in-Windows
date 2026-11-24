@@ -1,0 +1,8 @@
+PASS: window geometry saved on hide (120,140,1044,720,0)
+PASS: taskbar progress polling active without errors
+PASS: occupied legacy port, authenticated desktop, hide and single-instance restore
+PASS: window geometry restored after relaunch (120,140,1044,720,0)
+PASS: PE version metadata, ARP fields and bare Uninstall.exe /S returns 2 while running
+PASS: taskbar progress polling active without errors
+PASS: occupied legacy port, authenticated desktop, hide and single-instance restore
+PASS: skills and native turn succeeded with incompatible inherited XDG data; external database unmodified

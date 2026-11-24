@@ -32,34 +32,48 @@ jobs:
         working-directory: .
         env:
           OPENDIRECTOR_REF: 8258d4b016496d81a7c824e4cdfa42f3c840d5eb
-        run: bash scripts/vendor-upstream.sh
+        run: bash scripts/vendor-upstream.sh 2>&1 | tee _ci.log
 
       - name: Install uv
         shell: bash
         working-directory: .
         run: |
-          (command -v uv && uv --version) || true
-          command -v uv >/dev/null 2>&1 || python -m pip install --quiet uv
-          uv --version
+          {
+            (command -v uv && uv --version) || true
+            command -v uv >/dev/null 2>&1 || python -m pip install --quiet uv
+            uv --version
+          } 2>&1 | tee -a _ci.log
 
       - name: Fetch ffmpeg runtime
         shell: bash
         working-directory: .
         run: |
-          mkdir -p _ffmpeg _ffbin
-          curl -sSL -o _ffmpeg/ffmpeg.zip "https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip"
-          ls -la _ffmpeg/
-          powershell -c "Expand-Archive -Force -Path _ffmpeg/ffmpeg.zip -DestinationPath _ffmpeg/out"
-          find _ffmpeg/out -name "ffmpeg.exe" -o -name "ffprobe.exe"
-          cp "$(find _ffmpeg/out -name ffmpeg.exe | head -1)" _ffbin/
-          cp "$(find _ffmpeg/out -name ffprobe.exe | head -1)" _ffbin/
+          {
+            mkdir -p _ffmpeg _ffbin
+            curl -sSL -o _ffmpeg/ffmpeg.zip "https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip"
+            ls -la _ffmpeg/
+            powershell -c "Expand-Archive -Force -Path _ffmpeg/ffmpeg.zip -DestinationPath _ffmpeg/out"
+            find _ffmpeg/out -name "ffmpeg.exe" -o -name "ffprobe.exe"
+            cp "$(find _ffmpeg/out -name ffmpeg.exe | head -1)" _ffbin/
+            cp "$(find _ffmpeg/out -name ffprobe.exe | head -1)" _ffbin/
+          } 2>&1 | tee -a _ci.log
 
       - name: Prepare runtime cache
         shell: bash
         working-directory: .
         run: |
-          export OPENDIRECTOR_FFMPEG_DIR="$PWD/_ffbin"
-          node windows/scripts/prepare-runtime.mjs
+          {
+            export OPENDIRECTOR_FFMPEG_DIR="$PWD/_ffbin"
+            node windows/scripts/prepare-runtime.mjs
+          } 2>&1 | tee -a _ci.log
+
+      - name: Upload CI diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-diagnostics
+          path: _ci.log
+          if-no-files-found: ignore
 
       - name: Build NSIS installer
         run: npx electron-builder --win nsis

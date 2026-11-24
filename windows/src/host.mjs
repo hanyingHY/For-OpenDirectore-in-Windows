@@ -37,8 +37,8 @@ export const eventSchema = z.discriminatedUnion('type', [
 ]);
 
 export class Host {
-  constructor({ python, env, directory, log, onExit }) {
-    this.options = { python, env, directory, log, onExit };
+  constructor({ python, args, env, directory, log, onExit }) {
+    this.options = { python, args, env, directory, log, onExit };
     this.token = randomBytes(32).toString('hex');
     this.pending = new Map();
     this.nextId = 0;
@@ -48,11 +48,11 @@ export class Host {
   }
 
   spawn() {
-    const { python, env, directory, log } = this.options;
+    const { python, args, env, directory, log } = this.options;
     this.token = randomBytes(32).toString('hex');
     this.stopping = false;
     this.shutdownComplete = false;
-    this.child = spawn(python, ['-I', '-B', '-X', 'utf8', '-m', 'opendirector_api.desktop'], {
+    this.child = spawn(python, args ?? ['-I', '-B', '-X', 'utf8', '-m', 'opendirector_api.desktop'], {
       cwd: directory, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true,
     });
     // `log` may be any { write } sink (a file stream in production, a stub in tests).

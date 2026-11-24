@@ -1,19 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFileSync, mkdtempSync, chmodSync } from 'node:fs';
+import { writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Host, ownedURL, proxyRequest, eventSchema } from '../src/host.mjs';
 
-/** A fake `python` executable that speaks the Host control protocol. */
+/** A fake `python` executable that speaks the Host control protocol.
+ * Cross-platform: run the harness with the current Node binary through the
+ * configurable Host argv — no shell launcher, so it works on Windows too. */
 function fakePython(scriptBody) {
   const dir = mkdtempSync(join(tmpdir(), 'od-fake-python-'));
   const script = join(dir, 'fake.mjs');
   writeFileSync(script, scriptBody);
-  const launcher = join(dir, 'python');
-  writeFileSync(launcher, `#!/bin/sh\nexec "${process.execPath}" "${script}" "$@"\n`);
-  chmodSync(launcher, 0o755);
-  return launcher;
+  return { python: process.execPath, args: [script] };
 }
 
 const PASS_THROUGH = `
@@ -56,8 +55,10 @@ test('ownedURL accepts only the app scheme', () => {
 });
 
 test('Host starts, inspects and shuts down cleanly', async () => {
+  const fake = fakePython(PASS_THROUGH);
   const host = new Host({
-    python: fakePython(PASS_THROUGH),
+    python: fake.python,
+    args: fake.args,
     env: { PATH: '/usr/bin:/bin' },
     directory: tmpdir(),
     log: { write() {} },
@@ -81,11 +82,8 @@ test('Host reports unexpected exits through onExit', async () => {
     process.stdout.write(JSON.stringify({ type: 'ready', version: 1, url: 'http://127.0.0.1:39938/', runtime: {} }) + '\\n');
     setTimeout(() => process.exit(7), 50);
   `);
-  const launcher = join(dir, 'python');
-  writeFileSync(launcher, `#!/bin/sh\nexec "${process.execPath}" "${crash}"\n`);
-  chmodSync(launcher, 0o755);
   let exited = null;
-  const host = new Host({ python: launcher, env: { PATH: '/usr/bin:/bin' }, directory: tmpdir(), log: { write() {} }, onExit: code => { exited = code; } });
+  const host = new Host({ python: process.execPath, args: [crash], env: { PATH: '/usr/bin:/bin' }, directory: tmpdir(), log: { write() {} }, onExit: code => { exited = code; } });
   await host.ready;
   await new Promise(resolve => setTimeout(resolve, 400));
   assert.equal(exited, 7);

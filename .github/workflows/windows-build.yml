@@ -65,7 +65,7 @@ jobs:
           export OPENDIRECTOR_FFMPEG_DIR="$PWD/_ffbin"
           node windows/scripts/prepare-runtime.mjs > _prepare.log 2>&1 || {
             echo "::error::prepare-runtime failed; last lines of _prepare.log:"
-            tail -8 _prepare.log | while IFS= read -r line; do echo "::error::$line"; done
+            tail -12 _prepare.log | while IFS= read -r line; do echo "::error::$line"; done
             cat _prepare.log >> _ci.log
             exit 1
           }

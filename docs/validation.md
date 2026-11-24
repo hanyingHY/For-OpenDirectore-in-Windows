@@ -98,9 +98,33 @@ and encodes the frames to H.264 with `ffmpeg`.
 
 ```bash
 cd windows
-node --test tests/*.test.mjs     # 25 tests: window-state, updater,
-                                 # windows-native, host, locale
+npm test                          # 25 tests: window-state, updater,
+                                  # windows-native, host, locale
 ```
+
+## Upstream browser regression
+
+The full upstream browser suite (`scripts/run-browser-suite.mjs`, 29 curated
+workflows: session lease, MP4 export, timeline workflow with a real service
+restart, large video import, locale, provider settings, first-run, structured
+editors, …) passes 29/29 against the patched tree. Run it against a **fresh**
+fixture — the workflows create projects with fixed names and a reused API
+rejects the duplicates with HTTP 409:
+
+```bash
+# 1. fixture API (:8019) with a fresh --root and --assistant-fixture
+# 2. vite dev server (:5179) from build/opendirector
+cd build/opendirector
+CHROMIUM_PATH=… BROWSER_PATH=… PLAYWRIGHT_MODULE=… LD_LIBRARY_PATH=… \
+CREATION_WEB_URL=http://127.0.0.1:5179 CREATION_API_URL=http://127.0.0.1:8019 \
+node scripts/run-browser-suite.mjs
+# → 29/29 browser workflows passed in 417.1s
+```
+
+Environment notes: several workflows launch Chromium via `CHROMIUM_PATH`
+directly (not `engine.mjs`'s `BROWSER_PATH`), so export both. The timeline
+workflow spawns its own API through `python` — point `python` at the venv with
+`fastapi` via an `exec`-wrapper script (a symlink chain breaks venv detection).
 
 ## Windows installer
 
@@ -110,3 +134,16 @@ install, file association for `.odcanvas`, `opendirector://` protocol) via
 builds the installer on `windows-latest` and attaches it to each release; the
 runner is the authoritative Windows smoke environment (installer → onboarding →
 project → update → uninstall checks from issue #362).
+
+Current CI status (run 45387924507, 2026-11-24): **green** —
+
+- `build` (4m52s): unit tests 25/25 → vendored upstream + patch series →
+  standalone Python 3.12 via uv + opendirector wheel (web assets + OpenCode
+  runtime) + ffmpeg/ffprobe + CLI launcher (`windows/scripts/prepare-runtime.mjs`)
+  → NSIS installer artifact.
+- `smoke` (1m37s): silent `/S` install on a real `windows-latest` VM →
+  `OpenDirector.exe` present → silent uninstall.
+
+Failure diagnostics: on `prepare-runtime` failures the workflow tees the log to
+`_ci.log` (uploaded artifact + `::error::` annotations) and publishes the tail
+to a repo issue so remote log truncation can never hide the root cause.

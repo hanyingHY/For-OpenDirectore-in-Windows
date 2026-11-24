@@ -11,6 +11,9 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: read
+      issues: write
     defaults:
       run:
         working-directory: windows
@@ -78,6 +81,22 @@ jobs:
           name: ci-diagnostics
           path: _ci.log
           if-no-files-found: ignore
+
+      - name: Publish failure log to issue
+        if: failure()
+        shell: bash
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "### prepare-runtime failure (commit ${GITHUB_SHA}, run ${GITHUB_RUN_ID})"
+            echo '```'
+            tail -80 _prepare.log 2>/dev/null || echo "(no _prepare.log)"
+            echo '```'
+          } > _issue-body.md
+          EXISTING=$(gh issue list --search "CI diagnostics" --state open --json number -q '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then gh issue comment "$EXISTING" --body-file _issue-body.md; else gh issue create --title "CI diagnostics (prepare-runtime)" --body-file _issue-body.md; fi
 
       - name: Build NSIS installer
         run: npx electron-builder --win nsis

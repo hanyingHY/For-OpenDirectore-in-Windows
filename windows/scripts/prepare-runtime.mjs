@@ -33,7 +33,7 @@ try {
 function run(command, args, cwd = root) {
   const result = spawnSync(command, args, { cwd, stdio: 'inherit', shell: process.platform === 'win32' });
   if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(`${command} exited ${result.status}`);
+  if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} exited ${result.status}`);
 }
 
 // runtime/ is generated: always start from a clean python distribution.

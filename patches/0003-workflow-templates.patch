@@ -1,0 +1,438 @@
+--- a/src/canvas/workspace/WorkspaceView.tsx
++++ b/src/canvas/workspace/WorkspaceView.tsx
+@@ -22,6 +22,8 @@
+ import { createWorkspaceProject, listWorkspaceProjects, openWorkspaceProject, saveWorkspaceDocument, workspaceProjection } from "../../backend/workspace";
+ import { studyImage } from "../assets";
+ import { ExampleCanvasDialog } from "./example/ExampleCanvasDialog.tsx";
++import { TemplatePickerDialog } from "./TemplatePickerDialog";
++import { buildTemplateCommands } from "./templates.ts";
+ import {
+   IMAGE_EXAMPLE_ID,
+   VIDEO_EXAMPLE_ID,
+@@ -346,6 +348,7 @@
+    * the picker in the project menu.
+    */
+   const [exampleEntries, setExampleEntries] = useState<ExampleEntry[] | null>(null);
++  const [templatesOpen, setTemplatesOpen] = useState(false);
+   const [welcomeExampleId, setWelcomeExampleId] = useState<string | null>(null);
+   const [firstRunArriving, setFirstRunArriving] = useState(false);
+   const pendingFirstNodes = useRef<{ projectId: string; selection: string; nodes: CanvasNode[] } | null>(null);
+@@ -1222,6 +1225,10 @@
+               <CanvasIcon name="video" size={15} />
+               {t("canvas.workspace.empty.tryVideo")}
+             </button>
++            <button onClick={() => setTemplatesOpen(true)}>
++              <CanvasIcon name="stack" size={15} />
++              {t("canvas.workspace.templates.button")}
++            </button>
+           </div>
+           {exampleBusy && exampleButtonStatus && (
+             <div
+@@ -3000,6 +3007,22 @@
+           onImport={(archive) => importCanvasArchive(archive)}
+         />
+       )}
++      {templatesOpen && (
++        <TemplatePickerDialog
++          onClose={() => setTemplatesOpen(false)}
++          onApply={(template) => {
++            command({
++              type: "batch",
++              commands: buildTemplateCommands(
++                template,
++                t,
++                (kind) => t(nodeKindKeys[kind]),
++              ),
++            });
++            setTemplatesOpen(false);
++          }}
++        />
++      )}
+       {help && (
+         <div className="cw-modal-backdrop" onClick={() => setHelp(false)}>
+           <section
+--- /dev/null
++++ b/src/canvas/workspace/templates.ts
+@@ -0,0 +1,231 @@
++import {
++  createNode,
++  type CanvasCommand,
++  type CanvasEdge,
++  type CanvasNodeKind,
++  type Point,
++} from "../model.ts";
++import type { MessageKey } from "../../i18n/types";
++
++/**
++ * Workflow templates: one click scaffolds a whole production chain the way the
++ * template communities of commercial tools do — a brief, its generation nodes
++ * and the reference wiring between them. Templates are pure data; applying one
++ * is a single undoable batch command. Media stays empty: the scaffold is a
++ * starting point, never a fabricated result. Every user-visible string lives
++ * in the message catalogues.
++ */
++export interface TemplateStep {
++  kind: CanvasNodeKind;
++  /** Layout offset within the template box, in canvas units. */
++  x: number;
++  y: number;
++  /** Localized node title; falls back to the kind label. */
++  titleKey?: MessageKey;
++  /** Localized generation draft for media nodes. */
++  promptKey?: MessageKey;
++  /** Localized body text for text nodes. */
++  textKey?: MessageKey;
++  /** Multi-source video nodes are reference collages, like a batch drop. */
++  videoMode?: "reference";
++}
++
++export interface CanvasTemplate {
++  id: string;
++  icon: string;
++  nameKey: MessageKey;
++  describeKey: MessageKey;
++  steps: TemplateStep[];
++  /** Step index pairs wired as generation references (from → to). */
++  links: Array<[number, number]>;
++}
++
++export const CANVAS_TEMPLATES: CanvasTemplate[] = [
++  {
++    id: "product-promo",
++    icon: "model",
++    nameKey: "canvas.templates.productPromo.name",
++    describeKey: "canvas.templates.productPromo.describe",
++    steps: [
++      {
++        kind: "text",
++        x: 0,
++        y: 120,
++        titleKey: "canvas.templates.productPromo.brief",
++        textKey: "canvas.templates.productPromo.briefText",
++      },
++      {
++        kind: "image",
++        x: 380,
++        y: 0,
++        promptKey: "canvas.templates.productPromo.keyframePrompt",
++      },
++      {
++        kind: "video",
++        x: 760,
++        y: 60,
++        promptKey: "canvas.templates.productPromo.shotPrompt",
++      },
++      { kind: "timeline", x: 380, y: 420 },
++    ],
++    links: [
++      [0, 1],
++      [0, 2],
++    ],
++  },
++  {
++    id: "story-scenes",
++    icon: "video",
++    nameKey: "canvas.templates.storyScenes.name",
++    describeKey: "canvas.templates.storyScenes.describe",
++    steps: [
++      {
++        kind: "text",
++        x: 0,
++        y: 0,
++        titleKey: "canvas.templates.storyScenes.scene1",
++        textKey: "canvas.templates.storyScenes.scene1Text",
++      },
++      {
++        kind: "image",
++        x: 380,
++        y: 0,
++        promptKey: "canvas.templates.storyScenes.scene1Prompt",
++      },
++      {
++        kind: "text",
++        x: 0,
++        y: 380,
++        titleKey: "canvas.templates.storyScenes.scene2",
++        textKey: "canvas.templates.storyScenes.scene2Text",
++      },
++      {
++        kind: "image",
++        x: 380,
++        y: 380,
++        promptKey: "canvas.templates.storyScenes.scene2Prompt",
++      },
++      {
++        kind: "video",
++        x: 800,
++        y: 190,
++        videoMode: "reference",
++        promptKey: "canvas.templates.storyScenes.montagePrompt",
++      },
++    ],
++    links: [
++      [0, 1],
++      [2, 3],
++      [0, 4],
++      [2, 4],
++    ],
++  },
++  {
++    id: "music-visual",
++    icon: "audio",
++    nameKey: "canvas.templates.musicVisual.name",
++    describeKey: "canvas.templates.musicVisual.describe",
++    steps: [
++      {
++        kind: "text",
++        x: 0,
++        y: 0,
++        titleKey: "canvas.templates.musicVisual.brief",
++        textKey: "canvas.templates.musicVisual.briefText",
++      },
++      {
++        kind: "image",
++        x: 380,
++        y: 0,
++        promptKey: "canvas.templates.musicVisual.stylePrompt",
++      },
++      { kind: "audio", x: 0, y: 380 },
++      {
++        kind: "video",
++        x: 420,
++        y: 380,
++        videoMode: "reference",
++        promptKey: "canvas.templates.musicVisual.visualPrompt",
++      },
++    ],
++    links: [
++      [0, 1],
++      [0, 3],
++    ],
++  },
++  {
++    id: "talking-head",
++    icon: "clapperboard",
++    nameKey: "canvas.templates.talkingHead.name",
++    describeKey: "canvas.templates.talkingHead.describe",
++    steps: [
++      {
++        kind: "image",
++        x: 0,
++        y: 0,
++        promptKey: "canvas.templates.talkingHead.portraitPrompt",
++      },
++      { kind: "audio", x: 0, y: 380 },
++      {
++        kind: "text",
++        x: 420,
++        y: 0,
++        titleKey: "canvas.templates.talkingHead.script",
++        textKey: "canvas.templates.talkingHead.scriptText",
++      },
++      {
++        kind: "video",
++        x: 420,
++        y: 380,
++        videoMode: "reference",
++        promptKey: "canvas.templates.talkingHead.videoPrompt",
++      },
++    ],
++    links: [[2, 3]],
++  },
++];
++
++/**
++ * Build the undoable command batch that scaffolds `template` around the world
++ * origin. Titles, drafts and briefs are localized through `t`; the fallback
++ * label is the node kind's own name with a per-kind counter so repeated kinds
++ * stay distinct.
++ */
++export function buildTemplateCommands(
++  template: CanvasTemplate,
++  t: (key: MessageKey) => string,
++  kindLabel: (kind: CanvasNodeKind) => string,
++  origin: Point = { x: 0, y: 0 },
++): CanvasCommand[] {
++  const xs = template.steps.map((step) => step.x);
++  const ys = template.steps.map((step) => step.y);
++  // Centre the scaffold's bounding box on the origin so it lands in view on an
++  // empty canvas regardless of the template's shape.
++  const shift = {
++    x: origin.x - (Math.min(...xs) + Math.max(...xs)) / 2,
++    y: origin.y - (Math.min(...ys) + Math.max(...ys)) / 2,
++  };
++  const seen = new Map<CanvasNodeKind, number>();
++  const nodes = template.steps.map((step) => {
++    const count = (seen.get(step.kind) ?? 0) + 1;
++    seen.set(step.kind, count);
++    return createNode(step.kind, { x: step.x + shift.x, y: step.y + shift.y }, {
++      title: step.titleKey ? t(step.titleKey) : `${kindLabel(step.kind)} ${count}`,
++      ...(step.promptKey !== undefined ? { prompt: t(step.promptKey) } : {}),
++      ...(step.textKey !== undefined ? { text: t(step.textKey) } : {}),
++      ...(step.videoMode ? { settings: { videoMode: step.videoMode } } : {}),
++    });
++  });
++  const edges: CanvasEdge[] = template.links.map(([from, to]) => ({
++    id: crypto.randomUUID(),
++    source: nodes[from].id,
++    target: nodes[to].id,
++    sourceHandle: "out",
++    targetHandle: "in",
++    intent: "generation_input",
++  }));
++  return [
++    { type: "add-nodes", nodes },
++    ...edges.map((edge): CanvasCommand => ({ type: "add-edge", edge })),
++  ];
++}
+--- /dev/null
++++ b/src/canvas/workspace/TemplatePickerDialog.tsx
+@@ -0,0 +1,68 @@
++import { useEffect, useRef } from "react";
++import { useT } from "../../i18n/I18nProvider.tsx";
++import { CanvasIcon } from "../CanvasIcon";
++import { CANVAS_TEMPLATES, type CanvasTemplate } from "./templates.ts";
++import "../workspace/example/example-canvas.css";
++
++/**
++ * Workflow template picker: rows describe what a template scaffolds; picking
++ * one hands it to the caller's apply path. Reuses the example dialog's visual
++ * language so the two galleries feel like one product.
++ */
++export function TemplatePickerDialog({
++  onClose,
++  onApply,
++}: {
++  onClose: () => void;
++  onApply: (template: CanvasTemplate) => void;
++}) {
++  const t = useT();
++  const dialog = useRef<HTMLDialogElement>(null);
++
++  useEffect(() => {
++    const element = dialog.current!;
++    element.showModal();
++    return () => element.close();
++  }, []);
++
++  return (
++    <dialog
++      ref={dialog}
++      className="cw-example-dialog"
++      aria-labelledby="cw-template-title"
++      onCancel={(event) => {
++        event.preventDefault();
++        onClose();
++      }}
++      onClick={(event) => {
++        if (event.target === event.currentTarget) onClose();
++      }}
++    >
++      <header>
++        <h2 id="cw-template-title">{t("canvas.templates.dialog.title")}</h2>
++        <p>{t("canvas.templates.dialog.hint")}</p>
++      </header>
++      <ul className="cw-example-list">
++        {CANVAS_TEMPLATES.map((template) => (
++          <li key={template.id} className="cw-example-item" data-template-id={template.id}>
++            <div className="cw-example-item-heading">
++              <CanvasIcon name={template.icon} size={18} />
++              <strong>{t(template.nameKey)}</strong>
++            </div>
++            <p className="cw-example-summary">{t(template.describeKey)}</p>
++            <div className="cw-example-actions">
++              <button type="button" onClick={() => onApply(template)}>
++                {t("canvas.templates.action.apply")}
++              </button>
++            </div>
++          </li>
++        ))}
++      </ul>
++      <div className="cw-example-dialog-actions">
++        <button type="button" onClick={onClose}>
++          {t("canvas.example.action.close")}
++        </button>
++      </div>
++    </dialog>
++  );
++}
+--- a/src/i18n/messages/en-US/canvasWorkspace.ts
++++ b/src/i18n/messages/en-US/canvasWorkspace.ts
+@@ -135,6 +135,37 @@
+     other: "Workflow finished: all {count} nodes generated.",
+   },
+   "canvas.workspace.backgroundTasksFinished": "Background tasks finished",
++  "canvas.workspace.templates.button": "From a template",
++  "canvas.templates.dialog.title": "Start from a workflow template",
++  "canvas.templates.dialog.hint": "Scaffolds a production chain with one click - nodes, drafts and wiring stay fully editable.",
++  "canvas.templates.action.apply": "Use template",
++  "canvas.templates.productPromo.name": "Product promo",
++  "canvas.templates.productPromo.describe": "Brief -> keyframe -> shot -> timeline for a 15-second product film.",
++  "canvas.templates.productPromo.brief": "Brief",
++  "canvas.templates.storyScenes.name": "Story scenes",
++  "canvas.templates.storyScenes.describe": "Two storyboard scenes merged into one reference-driven video.",
++  "canvas.templates.storyScenes.scene1": "Scene 1",
++  "canvas.templates.storyScenes.scene2": "Scene 2",
++  "canvas.templates.musicVisual.name": "Music visual",
++  "canvas.templates.musicVisual.describe": "Style frame + track drive a beat-synced abstract video.",
++  "canvas.templates.musicVisual.brief": "Style brief",
++  "canvas.templates.talkingHead.name": "Talking head",
++  "canvas.templates.talkingHead.describe": "Portrait + voice track produce a lip-synced presenter clip.",
++  "canvas.templates.talkingHead.script": "Script",
++  "canvas.templates.productPromo.briefText": "A 15-second product film: hero shot on a dark stage, slow orbit, detail close-ups, bold finish.",
++  "canvas.templates.productPromo.keyframePrompt": "Cinematic product hero shot on a dark stage, dramatic rim light",
++  "canvas.templates.productPromo.shotPrompt": "Slow orbit around the product, soft studio reflections",
++  "canvas.templates.storyScenes.scene1Text": "Scene 1 - Dawn over the harbour, a lone fishing boat leaves the port.",
++  "canvas.templates.storyScenes.scene1Prompt": "Dawn harbour wide shot, lone fishing boat, soft golden light",
++  "canvas.templates.storyScenes.scene2Text": "Scene 2 - The boat returns at sunset, nets full, gulls overhead.",
++  "canvas.templates.storyScenes.scene2Prompt": "Sunset harbour, returning fishing boat, gulls, warm light",
++  "canvas.templates.storyScenes.montagePrompt": "Cinematic montage of the two scenes, smooth cuts",
++  "canvas.templates.musicVisual.briefText": "Abstract visuals synced to the beat: liquid metal, neon fog.",
++  "canvas.templates.musicVisual.stylePrompt": "Abstract liquid metal style frame, neon fog, high contrast",
++  "canvas.templates.musicVisual.visualPrompt": "Beat-synced abstract visuals, flowing liquid metal",
++  "canvas.templates.talkingHead.portraitPrompt": "Portrait of a presenter, soft key light, neutral background",
++  "canvas.templates.talkingHead.scriptText": "Script - Welcome to our studio. Today we walk through the new release.",
++  "canvas.templates.talkingHead.videoPrompt": "Talking-head video matching the portrait, natural lip sync",
+   "canvas.workspace.group.workflowIncomplete": "Workflow finished: {succeeded} succeeded, {failed} failed, {skipped} skipped (failed upstream or reference cycle).",
+ 
+   "canvas.workspace.menu.rename": "Rename",
+--- a/src/i18n/messages/zh-CN/canvasWorkspace.ts
++++ b/src/i18n/messages/zh-CN/canvasWorkspace.ts
+@@ -134,6 +134,37 @@
+     other: "工作流已完成，{count} 个节点全部生成成功。",
+   },
+   "canvas.workspace.backgroundTasksFinished": "后台任务已完成",
++  "canvas.workspace.templates.button": "从模板开始",
++  "canvas.templates.dialog.title": "从工作流模板开始",
++  "canvas.templates.dialog.hint": "一键搭建创作骨架——节点、草稿与连线均可自由编辑。",
++  "canvas.templates.action.apply": "使用模板",
++  "canvas.templates.productPromo.name": "产品宣传片",
++  "canvas.templates.productPromo.describe": "脚本 → 主视觉 → 镜头 → 时间线，15 秒产品短片骨架。",
++  "canvas.templates.productPromo.brief": "脚本",
++  "canvas.templates.storyScenes.name": "故事分镜",
++  "canvas.templates.storyScenes.describe": "两个分镜场景合成一条参考驱动的视频。",
++  "canvas.templates.storyScenes.scene1": "场景 1",
++  "canvas.templates.storyScenes.scene2": "场景 2",
++  "canvas.templates.musicVisual.name": "音乐可视",
++  "canvas.templates.musicVisual.describe": "风格帧 + 音轨驱动卡节拍的抽象视频。",
++  "canvas.templates.musicVisual.brief": "风格脚本",
++  "canvas.templates.talkingHead.name": "口播视频",
++  "canvas.templates.talkingHead.describe": "肖像 + 配音轨生成口型同步的主讲片段。",
++  "canvas.templates.talkingHead.script": "台词",
++  "canvas.templates.productPromo.briefText": "15 秒产品短片：暗色舞台主视觉、环绕运镜、细节特写、有力收尾。",
++  "canvas.templates.productPromo.keyframePrompt": "暗色舞台产品主视觉，轮廓光，电影感",
++  "canvas.templates.productPromo.shotPrompt": "镜头缓慢环绕产品，柔和棚拍反光",
++  "canvas.templates.storyScenes.scene1Text": "场景 1 —— 港口黎明，一艘渔船独自出港。",
++  "canvas.templates.storyScenes.scene1Prompt": "港口黎明大景，孤船出港，柔和金光",
++  "canvas.templates.storyScenes.scene2Text": "场景 2 —— 日落归航，满载而归，海鸥盘旋。",
++  "canvas.templates.storyScenes.scene2Prompt": "日落港口，渔船归航，海鸥，暖光",
++  "canvas.templates.storyScenes.montagePrompt": "两个场景的电影化混剪，转场顺滑",
++  "canvas.templates.musicVisual.briefText": "与节拍同步的抽象视觉：液态金属、霓虹雾气。",
++  "canvas.templates.musicVisual.stylePrompt": "液态金属抽象风格帧，霓虹雾气，高对比",
++  "canvas.templates.musicVisual.visualPrompt": "卡节拍的抽象视觉，液态金属流动",
++  "canvas.templates.talkingHead.portraitPrompt": "主讲人肖像，柔和主光，中性背景",
++  "canvas.templates.talkingHead.scriptText": "台词 —— 欢迎来到我们的工作室，今天带你了解全新版本。",
++  "canvas.templates.talkingHead.videoPrompt": "与肖像一致的口播视频，自然口型",
+   "canvas.workspace.group.workflowIncomplete": "工作流已结束：成功 {succeeded} 个，失败 {failed} 个，因上游失败或循环引用跳过 {skipped} 个。",
+ 
+   "canvas.workspace.menu.rename": "重命名",

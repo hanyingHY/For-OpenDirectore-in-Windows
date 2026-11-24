@@ -104,6 +104,24 @@ export async function runFullJourney(director, { web, api = 'http://127.0.0.1:80
     await director.frame('project created');
     await director.caption('A local project lives on disk from the first keystroke / 本地项目即时落盘', { frames: 2, holdMs: 700 });
 
+    // Workflow templates: scaffold a whole production chain in one click,
+    // then undo it so the demo canvas stays clean for the sections below.
+    await click('From a template');
+    await director.wait(900);
+    await director.frame('template picker');
+    await director.caption('Workflow templates scaffold a production in one click / 工作流模板一键搭建创作骨架', { frames: 2, holdMs: 800 });
+    const templateApply = page.locator('[data-template-id="product-promo"] button');
+    if (await templateApply.count()) {
+      await templateApply.click();
+      await director.wait(1200);
+      await director.frame('template applied');
+      await director.caption('Nodes, drafts and reference wiring land together / 节点、草稿与参考连线一体生成', { frames: 2, holdMs: 800 });
+      await page.mouse.click(80, 950);
+      await director.key('Control+z');
+      await director.wait(900);
+      await director.frame('template undone');
+    }
+
     // Tool rail tour.
     for (const label of ['Add Text', 'Add Image', 'Add Video', 'Add Audio', 'Add Timeline', 'Add Subject']) {
       await director.hoverText(label, { timeoutMs: 2500 });

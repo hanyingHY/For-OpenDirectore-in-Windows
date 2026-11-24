@@ -126,6 +126,17 @@ directly (not `engine.mjs`'s `BROWSER_PATH`), so export both. The timeline
 workflow spawns its own API through `python` — point `python` at the venv with
 `fastapi` via an `exec`-wrapper script (a symlink chain breaks venv detection).
 
+## Workflow templates (patch 0003)
+
+The empty canvas offers "From a template / 从模板开始": four scaffolds (product
+promo, story scenes, music visual, talking head) that land nodes, localized
+drafts and reference wiring as one undoable batch. Verified end-to-end with a
+headless probe: picker lists all four rows; applying "Story scenes" yields 5
+nodes + 4 reference edges with localized briefs; a single undo returns to the
+empty canvas. Media sources stay empty by design — the reference policy refuses
+empty sources, so templates only pre-wire links whose sources carry material
+(text briefs); media-to-media collage links form after generation.
+
 ## Windows installer
 
 `windows/package.json` builds an NSIS installer (`oneClick: false`, per-user

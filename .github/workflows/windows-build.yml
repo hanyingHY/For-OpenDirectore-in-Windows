@@ -53,13 +53,19 @@ jobs:
         run: |
           {
             mkdir -p _ffmpeg _ffbin
-            curl -sSL -o _ffmpeg/ffmpeg.zip "https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip"
+            curl -sSL --retry 4 --retry-delay 5 --retry-all-errors -o _ffmpeg/ffmpeg.zip "https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip"
             ls -la _ffmpeg/
+            # A truncated download must fail here, not inside Expand-Archive.
+            test "$(stat -c %s _ffmpeg/ffmpeg.zip)" -gt 20000000
             powershell -c "Expand-Archive -Force -Path _ffmpeg/ffmpeg.zip -DestinationPath _ffmpeg/out"
             find _ffmpeg/out -name "ffmpeg.exe" -o -name "ffprobe.exe"
             cp "$(find _ffmpeg/out -name ffmpeg.exe | head -1)" _ffbin/
             cp "$(find _ffmpeg/out -name ffprobe.exe | head -1)" _ffbin/
-          } 2>&1 | tee -a _ci.log
+          } 2>&1 | tee -a _ci.log || {
+            echo "::error::fetch-ffmpeg failed; last lines of _ci.log:"
+            tail -12 _ci.log | while IFS= read -r line; do echo "::error::$line"; done
+            exit 1
+          }
 
       - name: Prepare runtime cache
         shell: bash
@@ -92,7 +98,7 @@ jobs:
           {
             echo "### prepare-runtime failure (commit ${GITHUB_SHA}, run ${GITHUB_RUN_ID})"
             echo '```'
-            tail -80 _prepare.log 2>/dev/null || echo "(no _prepare.log)"
+            tail -80 _prepare.log 2>/dev/null || tail -80 _ci.log 2>/dev/null || echo "(no logs)"
             echo '```'
           } > _issue-body.md
           EXISTING=$(gh issue list --search "CI diagnostics" --state open --json number -q '.[0].number // empty')

@@ -156,3 +156,11 @@
   - 浏览器旅程全部 PASS：`agent_round_undo` zh/en；`agent_plan_mode` zh/en；`work_mode` zh/en；`timeline_output_dismiss`；`export_signal_contract`（data-od-exporting 13/40 采样命中）；`open_elsewhere_autoretry`（无点击自动进入）。
   - 九章全量录屏 `delivery/r5-upstream-8258d4b-full-journey.mp4`（112 s，1500×950，H.264，SHA256SUMS 已登记）。
 - 未完成：Windows 车道对新基线尚未运行（见 R5-0 的说明与决策 A）。
+
+## round 5 · desktop.17 · C5 完成气泡（Windows 原生）
+
+- `desktop/Updates.cs`：`Completed()` 在托盘图标上弹出气泡「渲染或导出已完成，点击查看」；点击气泡只恢复窗口，不会触发更新安装（`completionTip` 标记区分两种点击）。
+- `desktop/Host.cs`：沿用既有的「忙→闲」边沿（渲染/导出结束）且窗口不在前台时，同时闪烁任务栏并调用 `updates.Completed()`，日志写 `Completion notice shown`。
+- 范围收窄：探测信号只覆盖渲染与导出（`data-od-exporting` / 渲染进度 / 时间线待定卡），不覆盖 Agent 回复与媒体生成，所以文案不写「生成完成」。
+- 验证状态：沙箱没有 .NET，无法本地编译；由 windows-2022 车道的 `Compile installer` 与安装冒烟给出编译证据。运行时气泡需要在真机上观察一次（窗口切到后台 → 触发渲染 → 结束），这一项尚未自动化。
+- C9（WebView2 缺失引导）：代码已在 `Host.cs` 的 `NeedWebView2` 中实现，待真机验证。

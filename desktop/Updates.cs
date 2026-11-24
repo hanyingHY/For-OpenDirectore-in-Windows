@@ -29,6 +29,14 @@ internal sealed class Updates : IDisposable {
         } catch(Exception ex) { MessageBox.Show(owner,ex.Message,"OpenDirector"); }
     }
     bool shownTip;
+    // desktop.17 · C5: a render or export that finished while the window was in the background.
+    // Its balloon click restores the window; it never triggers an update install.
+    bool completionTip;
+    public void Completed() {
+        if(disposed) return;
+        completionTip=true;
+        icon.ShowBalloonTip(6000,\"OpenDirector\",\"渲染或导出已完成，点击查看。 / Render or export finished. Click to view.\",ToolTipIcon.Info);
+    }
     public void Hidden() { if(!shownTip) icon.ShowBalloonTip(4000,"OpenDirector","双击托盘图标恢复窗口 / Double-click to reopen",ToolTipIcon.Info); shownTip=true; }
     readonly Action<string> log;
     readonly Action<Process> contain;
@@ -65,7 +73,7 @@ internal sealed class Updates : IDisposable {
         icon.DoubleClick+=(s,e)=>show();
         check.Click+=(s,e)=>Check(true); stop.Click+=(s,e)=>Cancel(); install.Click+=(s,e)=>Install();
         icon.Icon=Host.AppIcon; icon.Text="OpenDirector · 更新 / Updates"; icon.ContextMenuStrip=menu;
-        icon.BalloonTipClicked+=(s,e)=>{ if(ready!=null) Install(); else show(); }; icon.Visible=true;
+        icon.BalloonTipClicked+=(s,e)=>{ if(completionTip) { completionTip=false; show(); } else if(ready!=null) Install(); else show(); }; icon.Visible=true;
         timer.Tick+=(s,e)=>{if(automatic.Checked) Check(false);}; timer.Start();
         Refresh(); if(automatic.Checked) Check(false);
     }

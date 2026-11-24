@@ -99,7 +99,11 @@ internal static class Host {
                     else if(state==2&&percent>=0) { bar.SetProgressState(main.Handle,TBPF_NORMAL); bar.SetProgressValue(main.Handle,(ulong)percent,100); }
                     else bar.SetProgressState(main.Handle,TBPF_INDETERMINATE);
                 }
-                if(busyViews>0 && state==0 && !closing && main.IsHandleCreated && GetForegroundWindow()!=main.Handle) Flash();
+                if(busyViews>0 && state==0 && !closing && main.IsHandleCreated && GetForegroundWindow()!=main.Handle) {
+                    Flash();
+                    // desktop.17 · C5: the same edge also raises a tray balloon (click restores the window).
+                    if(updates!=null) { updates.Completed(); Write("Completion notice shown"); }
+                }
                 busyViews = state==0 ? 0 : 1;
             } catch(Exception ex) { Write("Taskbar sync: "+ex.Message); }
             finally { if(!closing) activity.Start(); }

@@ -48,7 +48,7 @@
 
 ## 桌面版与网页版是什么关系？
 
-固定基线是 [ThinkFlowLab/OpenDirector `8584cc9`](https://github.com/ThinkFlowLab/OpenDirector/tree/8584cc96d588a978c60eb5c5f16c182bb3336f20)（0.1.5，含上游官方 Electron 桌面应用 #397 与下载页 #413，我们只消费其共享层）。使用其 `package-lock.json` 构建完整的 React/Vite UI，原样加载其 API、画布、时间线、字幕字体、双语消息、模型配置和 Agent skills。打包时对 Windows CLI 启动脚本、非交互 Git 初始化的标准输入和只读任务计数接入点做适配，不改画布的写入、渲染或模型业务规则。WebView2 提供 Edge 的文件选择、下载、剪贴板和 WebCodecs，不用另一套 UI 模仿原版。
+固定基线是 [ThinkFlowLab/OpenDirector `8258d4b`](https://github.com/ThinkFlowLab/OpenDirector/tree/8258d4b016496d81a7c824e4cdfa42f3c840d5eb)（0.1.5，含上游官方 Electron 桌面应用 #397 与下载页 #413，我们只消费其共享层）。使用其 `package-lock.json` 构建完整的 React/Vite UI，原样加载其 API、画布、时间线、字幕字体、双语消息、模型配置和 Agent skills。打包时对 Windows CLI 启动脚本、非交互 Git 初始化的标准输入和只读任务计数接入点做适配，不改画布的写入、渲染或模型业务规则。WebView2 提供 Edge 的文件选择、下载、剪贴板和 WebCodecs，不用另一套 UI 模仿原版。
 
 | 项目 | 本次交付 |
 | --- | --- |

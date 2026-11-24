@@ -1,8 +1,8 @@
 diff --git a/apps/api/src/opendirector_api/localization.py b/apps/api/src/opendirector_api/localization.py
-index 5018e41..eb06bf7 100644
+index eb3efb1f..4c2f710c 100644
 --- a/apps/api/src/opendirector_api/localization.py
 +++ b/apps/api/src/opendirector_api/localization.py
-@@ -87,7 +87,7 @@ ENGLISH_BY_CODE = {
+@@ -89,7 +89,7 @@ ENGLISH_BY_CODE = {
      "bigmodel_image_prompt": "Enter a GLM-Image prompt.",
      "bigmodel_image_size": "GLM-Image requires a preset size, or dimensions of 1024–2048 in multiples of 32.",
      "moss_layout_reference": "MOSS layout JSON does not accept additional text references. Put the requirements in the JSON or remove the text references.",
@@ -13,7 +13,7 @@ index 5018e41..eb06bf7 100644
      "missing_object": "The requested item no longer exists.",
 diff --git a/packages/core/src/opendirector/agent/bundled_profile.py b/packages/core/src/opendirector/agent/bundled_profile.py
 new file mode 100644
-index 0000000..6ad7494
+index 00000000..6ad7494d
 --- /dev/null
 +++ b/packages/core/src/opendirector/agent/bundled_profile.py
 @@ -0,0 +1,18 @@
@@ -36,7 +36,7 @@ index 0000000..6ad7494
 +    return {'XDG_CONFIG_HOME': str(config),
 +            **{f'XDG_{key.upper()}_HOME': str(profile / key) for key in ('data', 'cache', 'state')}}
 diff --git a/packages/core/src/opendirector/agent/native.py b/packages/core/src/opendirector/agent/native.py
-index e9f6bea..869bb88 100644
+index a765bc60..df9e4efc 100644
 --- a/packages/core/src/opendirector/agent/native.py
 +++ b/packages/core/src/opendirector/agent/native.py
 @@ -12,6 +12,7 @@ from tempfile import TemporaryDirectory
@@ -45,7 +45,7 @@ index e9f6bea..869bb88 100644
  
 +from opendirector.agent.bundled_profile import bundled_environment, bundled_profile
  from opendirector.agent.model_gateway import ModelGateway
- from opendirector.agent import cli_transport, deepseek
+ from opendirector.agent import cli_transport, deepseek, windows_powershell
  from opendirector.agent.cli_discovery import cli_executable
 @@ -28,7 +29,7 @@ from opendirector.domain.projects import ProjectError
  from opendirector.integrations.chat_completions import ChatCompletions
@@ -77,7 +77,7 @@ index e9f6bea..869bb88 100644
          session_directory = run.native_session_directory() if session_id else None
          if session_id and session_directory is None:
 diff --git a/packages/core/src/opendirector/agent/skills.py b/packages/core/src/opendirector/agent/skills.py
-index b0555b3..de27ebd 100644
+index b0555b32..de27ebd5 100644
 --- a/packages/core/src/opendirector/agent/skills.py
 +++ b/packages/core/src/opendirector/agent/skills.py
 @@ -5,6 +5,7 @@ import os

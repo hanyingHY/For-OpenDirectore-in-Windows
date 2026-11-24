@@ -24,9 +24,8 @@
 # edit is never overwritten, empty round, non-undoable writes not recorded);
 # agent/creation pytest subset 755 passed; verification/agent_round_undo.mjs PASS
 # zh-CN and en-US (2 writes recorded, 2 undone); npm run check:i18n and build pass.
-
 diff --git a/apps/api/src/opendirector_api/agent.py b/apps/api/src/opendirector_api/agent.py
-index 07a5ea8..74e076a 100644
+index 64efc898..a9010edf 100644
 --- a/apps/api/src/opendirector_api/agent.py
 +++ b/apps/api/src/opendirector_api/agent.py
 @@ -19,6 +19,7 @@ from opendirector.domain.creation.base import agent_command_id
@@ -37,7 +36,7 @@ index 07a5ea8..74e076a 100644
  from opendirector.domain.projects import ProjectError
  from opendirector.application.model_availability import requests_for
  from opendirector.domain.rule_facts import MAX_REFERENCES, PROMPT_MAX_LENGTH
-@@ -308,6 +309,19 @@ def agent_routes(projects, generation, configs, provider=None, *, active=None) -
+@@ -372,6 +373,19 @@ def agent_routes(projects, generation, configs, provider=None, *, active=None) -
          active = {}
      admission: dict[UUID, asyncio.Lock] = {}
  
@@ -58,7 +57,7 @@ index 07a5ea8..74e076a 100644
      async def conversation(project_id: UUID):
          value = await asyncio.to_thread(conversations.update, project_id)
 diff --git a/packages/core/src/opendirector/agent/tools.py b/packages/core/src/opendirector/agent/tools.py
-index 6511ece..f28f4e8 100644
+index 89ff1265..1aeab295 100644
 --- a/packages/core/src/opendirector/agent/tools.py
 +++ b/packages/core/src/opendirector/agent/tools.py
 @@ -14,6 +14,8 @@ from opendirector.application.creation_assets import CreationAssets
@@ -70,7 +69,7 @@ index 6511ece..f28f4e8 100644
  from opendirector.application.voice_library import VoiceLibrary
  from opendirector.domain.creation.assets import AssetProvenance
  from opendirector.domain.creation.base import ObjectVersion
-@@ -458,4 +460,10 @@ class AgentTools:
+@@ -471,4 +473,10 @@ class AgentTools:
                  receipt = await asyncio.to_thread(self.assets.execute, command, session=session, source='agent', provenance=provenance)
          else:
              receipt = await asyncio.to_thread(self.projects.execute, command, session=session, source='agent')
@@ -83,7 +82,7 @@ index 6511ece..f28f4e8 100644
          return receipt.model_dump(mode='json')
 diff --git a/packages/core/src/opendirector/application/agent_rounds.py b/packages/core/src/opendirector/application/agent_rounds.py
 new file mode 100644
-index 0000000..9987349
+index 00000000..9987349e
 --- /dev/null
 +++ b/packages/core/src/opendirector/application/agent_rounds.py
 @@ -0,0 +1,111 @@
@@ -200,7 +199,7 @@ index 0000000..9987349
 +                complete=remaining['undoable'] == 0 and all(r['status'] != 'rejected' for r in results))
 diff --git a/src/backend/roundChanges.ts b/src/backend/roundChanges.ts
 new file mode 100644
-index 0000000..03eea3b
+index 00000000..03eea3b4
 --- /dev/null
 +++ b/src/backend/roundChanges.ts
 @@ -0,0 +1,32 @@
@@ -237,7 +236,7 @@ index 0000000..03eea3b
 +export const undoRound = (projectId: string, turnId: string) =>
 +  request<RoundUndoResult>(roundPath(projectId, turnId) + "/undo", json("POST", {}));
 diff --git a/src/canvas/AssistantPanel.tsx b/src/canvas/AssistantPanel.tsx
-index e6c820f..132ea07 100644
+index 7623e14e..9f317480 100644
 --- a/src/canvas/AssistantPanel.tsx
 +++ b/src/canvas/AssistantPanel.tsx
 @@ -11,6 +11,7 @@ import { AttachmentStrip, AttachmentHover } from "./AssistantMedia";
@@ -248,7 +247,7 @@ index e6c820f..132ea07 100644
  import { AssistantConversations } from "./AssistantConversations";
  import { AgentPicker } from "./AgentPicker";
  import { ModelPicker } from "./AssistantPickers";
-@@ -489,6 +490,15 @@ export function AssistantPanel({
+@@ -501,6 +502,15 @@ export function AssistantPanel({
                    : t("assistant.reply.empty"))
                )}
              </div>
@@ -266,7 +265,7 @@ index e6c820f..132ea07 100644
                  href={`/?${trace}`} target="_blank" rel="noopener noreferrer">
 diff --git a/src/canvas/AssistantRoundChanges.tsx b/src/canvas/AssistantRoundChanges.tsx
 new file mode 100644
-index 0000000..424f6ce
+index 00000000..424f6cec
 --- /dev/null
 +++ b/src/canvas/AssistantRoundChanges.tsx
 @@ -0,0 +1,81 @@
@@ -352,10 +351,10 @@ index 0000000..424f6ce
 +  );
 +}
 diff --git a/src/canvas/assistant-panel.css b/src/canvas/assistant-panel.css
-index 8b53028..4a37ef8 100644
+index 8c883be8..35a11270 100644
 --- a/src/canvas/assistant-panel.css
 +++ b/src/canvas/assistant-panel.css
-@@ -901,3 +901,25 @@
+@@ -929,3 +929,25 @@
    border: 1px solid var(--cw-border, rgba(255, 255, 255, 0.16));
    align-self: flex-start;
  }
@@ -382,7 +381,7 @@ index 8b53028..4a37ef8 100644
 +.cw-chat-round-changes p { margin: 0; flex-basis: 100%; }
 +.cw-chat-round-changes[data-state="error"] p { color: var(--cw-danger, #b42318); }
 diff --git a/src/i18n/messages/en-US/assistant.ts b/src/i18n/messages/en-US/assistant.ts
-index 853d7e3..1b5a7fe 100644
+index 498dead7..4559905e 100644
 --- a/src/i18n/messages/en-US/assistant.ts
 +++ b/src/i18n/messages/en-US/assistant.ts
 @@ -1,5 +1,13 @@
@@ -400,7 +399,7 @@ index 853d7e3..1b5a7fe 100644
    "assistant.reply.copyLink": "Copy link",
    "assistant.reply.copyLinkFailed": "Copy failed; select the URL to copy it",
 diff --git a/src/i18n/messages/zh-CN/assistant.ts b/src/i18n/messages/zh-CN/assistant.ts
-index b93b68f..07ece6d 100644
+index 55e087a1..8e10c29c 100644
 --- a/src/i18n/messages/zh-CN/assistant.ts
 +++ b/src/i18n/messages/zh-CN/assistant.ts
 @@ -1,5 +1,13 @@
@@ -418,10 +417,10 @@ index b93b68f..07ece6d 100644
    "assistant.reply.copyLink": "复制链接",
    "assistant.reply.copyLinkFailed": "复制失败，请选择链接地址复制",
 diff --git a/tests/browser/creation_server.py b/tests/browser/creation_server.py
-index 4a050f3..700298e 100644
+index c56a09d6..b4ef65c7 100644
 --- a/tests/browser/creation_server.py
 +++ b/tests/browser/creation_server.py
-@@ -199,6 +199,19 @@ if args.assistant_fixture:
+@@ -209,6 +209,19 @@ if args.assistant_fixture:
                  plan_refusals.append(dict(name=name, mode=run.mode,
                      code=result.value.get('code'), error=result.error))
                  continue
@@ -443,7 +442,7 @@ index 4a050f3..700298e 100644
  
 diff --git a/tests/test_agent_rounds.py b/tests/test_agent_rounds.py
 new file mode 100644
-index 0000000..6731588
+index 00000000..67315885
 --- /dev/null
 +++ b/tests/test_agent_rounds.py
 @@ -0,0 +1,80 @@

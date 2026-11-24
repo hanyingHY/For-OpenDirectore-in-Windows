@@ -20,7 +20,7 @@
 #    session without writing a preference (verified by verification/work_mode.mjs).
 #  * Scope: result cards are follow-up work.
 diff --git a/src/canvas/AssistantPanel.tsx b/src/canvas/AssistantPanel.tsx
-index 70bb8f5..644e80e 100644
+index d9a80f84..36383d96 100644
 --- a/src/canvas/AssistantPanel.tsx
 +++ b/src/canvas/AssistantPanel.tsx
 @@ -8,6 +8,8 @@ import { loadReferenceCatalog } from "../backend/referenceCatalog.ts";
@@ -46,7 +46,7 @@ index 70bb8f5..644e80e 100644
    catalog: BackendModels;
    nodes: CanvasNode[];
    visibleNodes: CanvasNode[];
-@@ -499,8 +505,25 @@ export function AssistantPanel({
+@@ -511,8 +517,25 @@ export function AssistantPanel({
            </article>
          );
          })}
@@ -74,7 +74,7 @@ index 70bb8f5..644e80e 100644
              <span>{chat.error}</span>
 diff --git a/src/canvas/SimplePresets.tsx b/src/canvas/SimplePresets.tsx
 new file mode 100644
-index 0000000..2c7d818
+index 00000000..2c7d8183
 --- /dev/null
 +++ b/src/canvas/SimplePresets.tsx
 @@ -0,0 +1,57 @@
@@ -137,7 +137,7 @@ index 0000000..2c7d818
 +}
 diff --git a/src/canvas/SimpleResultCards.tsx b/src/canvas/SimpleResultCards.tsx
 new file mode 100644
-index 0000000..f9bf4e0
+index 00000000..f9bf4e0f
 --- /dev/null
 +++ b/src/canvas/SimpleResultCards.tsx
 @@ -0,0 +1,98 @@
@@ -241,7 +241,7 @@ index 0000000..f9bf4e0
 +}
 diff --git a/src/canvas/WorkModePicker.tsx b/src/canvas/WorkModePicker.tsx
 new file mode 100644
-index 0000000..df586d3
+index 00000000..df586d3c
 --- /dev/null
 +++ b/src/canvas/WorkModePicker.tsx
 @@ -0,0 +1,47 @@
@@ -292,9 +292,21 @@ index 0000000..df586d3
 +    </section>
 +  );
 +}
+diff --git a/src/canvas/useAssistantChat.ts b/src/canvas/useAssistantChat.ts
+index b82a19ed..3212ab91 100644
+--- a/src/canvas/useAssistantChat.ts
++++ b/src/canvas/useAssistantChat.ts
+@@ -665,6 +665,7 @@ export function useAssistantChat(
+   };
+   return {
+     value,
++    setValue,
+     runtimes,
+     runtimesLoading,
+     refreshRuntimes,
 diff --git a/src/canvas/work-mode.css b/src/canvas/work-mode.css
 new file mode 100644
-index 0000000..a42f4ad
+index 00000000..a42f4ad7
 --- /dev/null
 +++ b/src/canvas/work-mode.css
 @@ -0,0 +1,166 @@
@@ -466,7 +478,7 @@ index 0000000..a42f4ad
 +}
 diff --git a/src/canvas/workMode.ts b/src/canvas/workMode.ts
 new file mode 100644
-index 0000000..848db43
+index 00000000..848db436
 --- /dev/null
 +++ b/src/canvas/workMode.ts
 @@ -0,0 +1,37 @@
@@ -508,7 +520,7 @@ index 0000000..848db43
 +  return { mode: stored ?? "advanced", choose, dismiss, unchosen: stored === null && !dismissed } as const;
 +}
 diff --git a/src/canvas/workspace/WorkspaceView.tsx b/src/canvas/workspace/WorkspaceView.tsx
-index b8a780b..9281f07 100644
+index 5663d534..626ccc53 100644
 --- a/src/canvas/workspace/WorkspaceView.tsx
 +++ b/src/canvas/workspace/WorkspaceView.tsx
 @@ -49,6 +49,9 @@ import { REFERENCE_PORT_ICON_SIZE, REFERENCE_PORT_SIZE, referencePortDirection,
@@ -529,8 +541,8 @@ index b8a780b..9281f07 100644
 +import { dismissModelSetup, shouldShowModelSetup } from "../ModelSetup";
  
  import { WelcomeScreen } from "../WelcomeScreen";
- import { SettingsDialog } from "../SettingsDialog";
-@@ -109,6 +112,8 @@ import { DirectorStage, IconButton, helpShortcuts, nodeTypes, edgeTypes, referen
+ import { firstRunCapabilities } from "../firstRunModels";
+@@ -111,6 +114,8 @@ import { DirectorStage, IconButton, helpShortcuts, nodeKindKeys, nodeTypes, edge
  
  
  export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
@@ -539,7 +551,7 @@ index b8a780b..9281f07 100644
    const timelineOutput = useTimelineOutput(rt.doc.id, rt.doc.nodes, rt.notify);
    const {
      actionMedia,
-@@ -485,7 +490,7 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
+@@ -527,7 +532,7 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
      <div
        inert={!ready || switching}
        aria-busy={!ready || switching}
@@ -548,7 +560,7 @@ index b8a780b..9281f07 100644
        ref={root}
        data-testid="canvas-workspace"
        data-desktop-sidebar={desktop && desktopSidebarOpen ? "open" : "closed"}
-@@ -1041,6 +1046,20 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
+@@ -1083,6 +1088,20 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
            )}
          </div>
          <div className="cw-top-actions">
@@ -569,7 +581,7 @@ index b8a780b..9281f07 100644
            <span ref={assetListAnchor} className="cw-asset-list-anchor">
              <IconButton
                name="search"
-@@ -2442,6 +2461,12 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
+@@ -2490,6 +2509,12 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
            key={doc.id}
            documentId={doc.id}
            documentTitle={projectDisplayName(t, doc.title, doc.defaultNameIndex)}
@@ -582,18 +594,18 @@ index b8a780b..9281f07 100644
            catalog={backendCatalog}
            nodes={[...doc.nodes, ...(doc.hiddenNodes ?? [])]}
            visibleNodes={doc.nodes}
-@@ -2874,6 +2899,9 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
-             onClose={closeEditor}
-           />
-         )}
+@@ -2925,6 +2950,9 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
+       {firstRunArriving && (
+         <div className="cw-first-run-arrival" aria-hidden="true" onAnimationEnd={() => setFirstRunArriving(false)} />
+       )}
 +      {workModeState.unchosen && !welcomeOpen && !shouldShowModelSetup() && (
 +        <WorkModePicker onChoose={(mode) => workModeState.choose(mode)} onDismiss={workModeState.dismiss} />
 +      )}
        {welcomeOpen && <WelcomeScreen
          catalog={backendCatalog}
-         onSkip={() => { dismissModelSetup(); setWelcomeOpen(false); }}
+         projectId={doc.id}
 diff --git a/src/i18n/messages/en-US/canvasWorkspace.ts b/src/i18n/messages/en-US/canvasWorkspace.ts
-index e549b85..94f026d 100644
+index e549b85e..94f026d4 100644
 --- a/src/i18n/messages/en-US/canvasWorkspace.ts
 +++ b/src/i18n/messages/en-US/canvasWorkspace.ts
 @@ -81,6 +81,28 @@ export const canvasWorkspace = {
@@ -626,7 +638,7 @@ index e549b85..94f026d 100644
  
    "canvas.workspace.empty.title": "Your story, directed by you",
 diff --git a/src/i18n/messages/zh-CN/canvasWorkspace.ts b/src/i18n/messages/zh-CN/canvasWorkspace.ts
-index 80c9a8b..bd162c2 100644
+index 80c9a8b7..bd162c2a 100644
 --- a/src/i18n/messages/zh-CN/canvasWorkspace.ts
 +++ b/src/i18n/messages/zh-CN/canvasWorkspace.ts
 @@ -82,6 +82,28 @@ export const canvasWorkspace = {

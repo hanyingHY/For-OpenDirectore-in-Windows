@@ -4,7 +4,7 @@
 # fetch), ffmpeg (PyPI imageio-ffmpeg), ffprobe (npm), CJK font (npm). Idempotent enough to re-run.
 set -euo pipefail
 REPO="${REPO:-$HOME/For-OpenDirectore-in-Windows}"
-SHA=8584cc96d588a978c60eb5c5f16c182bb3336f20
+SHA=8258d4b016496d81a7c824e4cdfa42f3c840d5eb
 SRC=/tmp/src; BROWSER=/tmp/browser; LIBS=/tmp/libs
 if [ ! -d "$SRC/packages" ]; then
   rm -rf "$SRC" && mkdir -p "$SRC"

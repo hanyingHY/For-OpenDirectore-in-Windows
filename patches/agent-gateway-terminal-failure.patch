@@ -1,5 +1,5 @@
 diff --git a/packages/core/src/opendirector/agent/model_gateway.py b/packages/core/src/opendirector/agent/model_gateway.py
-index a87c89f..f26d89f 100644
+index a87c89f6..f26d89f5 100644
 --- a/packages/core/src/opendirector/agent/model_gateway.py
 +++ b/packages/core/src/opendirector/agent/model_gateway.py
 @@ -12,6 +12,15 @@ import httpx
@@ -51,10 +51,10 @@ index a87c89f..f26d89f 100644
                      await writer.drain()
          finally:
 diff --git a/tests/test_model_gateway.py b/tests/test_model_gateway.py
-index 14d5131..62b4c2d 100644
+index 777c5aa4..7e28dfcf 100644
 --- a/tests/test_model_gateway.py
 +++ b/tests/test_model_gateway.py
-@@ -144,10 +144,12 @@ def test_provider_error_body_has_a_complete_response_boundary(tmp_path):
+@@ -147,10 +147,12 @@ def test_provider_error_body_has_a_complete_response_boundary(tmp_path):
      asyncio.run(run())
  
  
@@ -68,7 +68,7 @@ index 14d5131..62b4c2d 100644
              raise httpx.ConnectError('private-token')
          if kind == 'validation':
              def rejected(*args):
-@@ -157,8 +159,15 @@ def test_failure_before_response_headers_has_a_bounded_error(tmp_path, monkeypat
+@@ -160,8 +162,15 @@ def test_failure_before_response_headers_has_a_bounded_error(tmp_path, monkeypat
              async with httpx.AsyncClient(trust_env=False, timeout=3) as client:
                  async with request(client, url) as response:
                      assert response.status_code == expected

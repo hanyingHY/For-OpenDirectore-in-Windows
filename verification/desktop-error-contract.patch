@@ -1,6 +1,8 @@
+diff --git a/tests/test_native_runtime.py b/tests/test_native_runtime.py
+index 9d44c947..fc6f4de4 100644
 --- a/tests/test_native_runtime.py
 +++ b/tests/test_native_runtime.py
-@@ -641,7 +641,7 @@
+@@ -817,7 +817,7 @@ def test_bundled_launch_reports_incomplete_install(tmp_path, monkeypatch):
      monkeypatch.setattr(native, 'executable', lambda _: str(binary))
      instance = AgentRuntimes(CreationProjects(LocalProjects(tmp_path)), None, ModelConfigs(tmp_path))
      async def check():
@@ -9,9 +11,11 @@
              async for _ in instance.stream(RunContext(runtime='default', project_id=uuid4(),
                      turn_id=uuid4(), session=str(uuid4()), directory=tmp_path,
                      config={'modelId': 'test', 'apiKey': '', 'url': 'http://localhost/v1', 'protocol': 'openai'},
+diff --git a/tests/test_runtime_readiness.py b/tests/test_runtime_readiness.py
+index 3436086f..5d32a833 100644
 --- a/tests/test_runtime_readiness.py
 +++ b/tests/test_runtime_readiness.py
-@@ -141,11 +141,11 @@
+@@ -144,11 +144,11 @@ def test_skill_endpoint_reports_incomplete_bundled_install(tmp_path, monkeypatch
          response = client.get(path + '/assistant/skills')
          assert response.status_code == 503
          assert response.json()['code'] == 'agent_dependency_unavailable'

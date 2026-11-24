@@ -25,10 +25,10 @@
 # and releases them at next launch, so an app crash + restart opens at
 # once (see tests/test_transport.py).
 diff --git a/src/canvas/workspace/WorkspaceView.tsx b/src/canvas/workspace/WorkspaceView.tsx
-index 1866d65..b8a780b 100644
+index 9e9bfc62..5663d534 100644
 --- a/src/canvas/workspace/WorkspaceView.tsx
 +++ b/src/canvas/workspace/WorkspaceView.tsx
-@@ -189,6 +189,7 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
+@@ -192,6 +192,7 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
      importInput,
      importLibrarySubjects,
      initializationError,
@@ -36,7 +36,7 @@ index 1866d65..b8a780b 100644
      insertLibraryItems,
      installDocument,
      interacting,
-@@ -2984,6 +2985,19 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
+@@ -3079,6 +3080,19 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
                <button onClick={() => window.location.reload()}>{t("canvas.workspace.loading.reconnect")}</button>
                <a href="/">{t("canvas.workspace.loading.backHome")}</a>
              </div>
@@ -57,10 +57,10 @@ index 1866d65..b8a780b 100644
              <span className="canvas-loading-message">
                <span className="canvas-loading-spinner" aria-hidden="true" />
 diff --git a/src/canvas/workspace/state.ts b/src/canvas/workspace/state.ts
-index c4e4828..83ddcab 100644
+index dc181ba0..abc300af 100644
 --- a/src/canvas/workspace/state.ts
 +++ b/src/canvas/workspace/state.ts
-@@ -84,6 +84,10 @@ export type WorkspaceState = {
+@@ -85,6 +85,10 @@ export type WorkspaceState = {
    ready: boolean;
    pageVisible: boolean;
    initializationError: string;
@@ -71,7 +71,7 @@ index c4e4828..83ddcab 100644
    editProjectNameId: string | null;
    projectRenaming: boolean;
    switching: boolean;
-@@ -153,6 +157,7 @@ const workspaceKeys = [
+@@ -155,6 +159,7 @@ const workspaceKeys = [
    "ready",
    "pageVisible",
    "initializationError",
@@ -79,7 +79,7 @@ index c4e4828..83ddcab 100644
    "editProjectNameId",
    "projectRenaming",
    "switching",
-@@ -213,6 +218,7 @@ export function createWorkspaceState(): WorkspaceState {
+@@ -216,6 +221,7 @@ export function createWorkspaceState(): WorkspaceState {
      ready: false,
      pageVisible: typeof document === "undefined" ? true : !document.hidden,
      initializationError: "",
@@ -88,7 +88,7 @@ index c4e4828..83ddcab 100644
      projectRenaming: false,
      switching: false,
 diff --git a/src/canvas/workspace/useWorkspaceDocument.ts b/src/canvas/workspace/useWorkspaceDocument.ts
-index edb6be8..134d07d 100644
+index 52e37c65..60eb596f 100644
 --- a/src/canvas/workspace/useWorkspaceDocument.ts
 +++ b/src/canvas/workspace/useWorkspaceDocument.ts
 @@ -2,7 +2,7 @@
@@ -108,7 +108,7 @@ index edb6be8..134d07d 100644
      setInteracting,
      setMeasurements,
      setMenu,
-@@ -473,19 +474,39 @@ export function useWorkspaceDocument(rt: WorkspaceRuntime) {
+@@ -482,19 +483,39 @@ export function useWorkspaceDocument(rt: WorkspaceRuntime) {
  
    useEffect(() => {
      let alive = true;
@@ -151,7 +151,7 @@ index edb6be8..134d07d 100644
      };
    }, [installDocument, notify]);
 diff --git a/src/i18n/messages/en-US/canvasWorkspace.ts b/src/i18n/messages/en-US/canvasWorkspace.ts
-index 2b2bafb..e549b85 100644
+index 2b2bafbc..e549b85e 100644
 --- a/src/i18n/messages/en-US/canvasWorkspace.ts
 +++ b/src/i18n/messages/en-US/canvasWorkspace.ts
 @@ -94,6 +94,8 @@ export const canvasWorkspace = {
@@ -164,7 +164,7 @@ index 2b2bafb..e549b85 100644
    "canvas.workspace.selection.edgesSelected": {
      one: "Selected {count} connection",
 diff --git a/src/i18n/messages/zh-CN/canvasWorkspace.ts b/src/i18n/messages/zh-CN/canvasWorkspace.ts
-index b56bee8..80c9a8b 100644
+index b56bee86..80c9a8b7 100644
 --- a/src/i18n/messages/zh-CN/canvasWorkspace.ts
 +++ b/src/i18n/messages/zh-CN/canvasWorkspace.ts
 @@ -93,6 +93,8 @@ export const canvasWorkspace = {
@@ -177,7 +177,7 @@ index b56bee8..80c9a8b 100644
    "canvas.workspace.selection.edgesSelected": {
      one: "已选 {count} 条连线",
 diff --git a/src/styles/base.css b/src/styles/base.css
-index 217adcc..bba1d34 100644
+index 217adcc6..bba1d34b 100644
 --- a/src/styles/base.css
 +++ b/src/styles/base.css
 @@ -92,6 +92,9 @@ code {

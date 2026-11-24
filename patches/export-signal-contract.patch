@@ -31,7 +31,7 @@
 # No storage, render or model business rule is touched: this is a
 # presentation-side signal plus two message strings.
 diff --git a/src/canvas/DirectorStage.tsx b/src/canvas/DirectorStage.tsx
-index 98e7a6d..cd2199e 100644
+index 98e7a6de..cd2199e4 100644
 --- a/src/canvas/DirectorStage.tsx
 +++ b/src/canvas/DirectorStage.tsx
 @@ -1,5 +1,6 @@
@@ -50,7 +50,7 @@ index 98e7a6d..cd2199e 100644
      ((result: LinkedMediaResult) => boolean | Promise<boolean>) | null
    >(null);
 diff --git a/src/canvas/TimelineEditor.tsx b/src/canvas/TimelineEditor.tsx
-index 0e67d6c..d69ecb5 100644
+index 0e67d6c4..d69ecb5c 100644
 --- a/src/canvas/TimelineEditor.tsx
 +++ b/src/canvas/TimelineEditor.tsx
 @@ -7,6 +7,7 @@ import {
@@ -70,7 +70,7 @@ index 0e67d6c..d69ecb5 100644
      pointerId: number;
      axis: "library" | "tracks";
 diff --git a/src/canvas/TimelineOutput.tsx b/src/canvas/TimelineOutput.tsx
-index 1cf76e7..82b2152 100644
+index 1cf76e7c..82b2152e 100644
 --- a/src/canvas/TimelineOutput.tsx
 +++ b/src/canvas/TimelineOutput.tsx
 @@ -3,6 +3,7 @@ import { creationClient, CreationCommandError } from "../backend/creationClient.
@@ -95,7 +95,7 @@ index 1cf76e7..82b2152 100644
      itemId: string;
 diff --git a/src/canvas/exportSignal.ts b/src/canvas/exportSignal.ts
 new file mode 100644
-index 0000000..357b27b
+index 00000000..addc7768
 --- /dev/null
 +++ b/src/canvas/exportSignal.ts
 @@ -0,0 +1,67 @@
@@ -167,7 +167,7 @@ index 0000000..357b27b
 +  return inFlight;
 +}
 diff --git a/src/desktop.ts b/src/desktop.ts
-index 5e8471d..d7a97a7 100644
+index 5e8471d7..d7a97a78 100644
 --- a/src/desktop.ts
 +++ b/src/desktop.ts
 @@ -10,15 +10,12 @@ declare global {
@@ -194,10 +194,10 @@ index 5e8471d..d7a97a7 100644
 +  return exportStarted();
  }
 diff --git a/src/i18n/messages/en-US/errors.ts b/src/i18n/messages/en-US/errors.ts
-index 7bb1957..dc72cfc 100644
+index b14bf08c..53f39dcf 100644
 --- a/src/i18n/messages/en-US/errors.ts
 +++ b/src/i18n/messages/en-US/errors.ts
-@@ -771,9 +771,9 @@ export const errors = {
+@@ -775,9 +775,9 @@ export const errors = {
    "errors.render.mp4Even":
      "MP4 width and height must be even. Adjust the timeline size.",
    "errors.render.mp4H264":
@@ -210,10 +210,10 @@ index 7bb1957..dc72cfc 100644
    "errors.render.audioCrop": "The audio crop parameters are invalid.",
    "errors.render.audioLength": "The audio sample lengths do not match.",
 diff --git a/src/i18n/messages/zh-CN/errors.ts b/src/i18n/messages/zh-CN/errors.ts
-index 0f8dae2..e7de91a 100644
+index 991eaa7d..953397bf 100644
 --- a/src/i18n/messages/zh-CN/errors.ts
 +++ b/src/i18n/messages/zh-CN/errors.ts
-@@ -580,8 +580,9 @@ export const errors = {
+@@ -584,8 +584,9 @@ export const errors = {
    "errors.render.mp4Invalid": "导出时长或帧率无效。",
    "errors.render.mp4Even": "MP4 的宽度与高度需要为偶数，请调整时间线尺寸。",
    "errors.render.mp4H264":

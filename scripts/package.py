@@ -12,7 +12,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 WORK = ROOT / '.work'
 APP = WORK / 'app'
-SHA = '8584cc96d588a978c60eb5c5f16c182bb3336f20'
+SHA = '8258d4b016496d81a7c824e4cdfa42f3c840d5eb'
 PY = 'cpython-3.12.16+20261110-x86_64-pc-windows-msvc-install_only_stripped.tar.gz'
 FF = 'ffmpeg-9.0.2-essentials_build'
 WV = '1.0.2903.40'

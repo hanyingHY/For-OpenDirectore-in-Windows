@@ -142,3 +142,17 @@
 - Verified (sandbox): `tests/test_agent_rounds.py` 4/4; agent/creation pytest subset 755 passed; full `python -m unittest discover -s tests` 39 OK; `npm run check:i18n` 3302 keys 0 problems; `npm run build` OK; `verification/agent_round_undo.mjs` PASS zh-CN and en-US.
 - Delivery: `delivery/desktop16-round-undo-zh.mp4` (15 s) and `-en.mp4` (15 s), sha256 in SHA256SUMS.txt.
 - Not yet: Windows CI lane for this patch; full nine-chapter reel including E1; undo of agent writes when the same node was edited by the user is intentionally refused, not merged.
+
+## round 5 · R5-1 基线跟进到上游 `8258d4b`（2026-11-23，沙箱）
+
+- 基线：上游 `main` `8258d4b0`（比 0.1.5 `8584cc9` 多 19 个提交）。`scripts/package.py` 与 `verification/sandbox/setup.sh` 的 `SHA` 已更新。上游 `package.json` 与锁文件自 0.1.5 起未变，依赖可复用。
+- 补丁链：11 张按原顺序重放。`--3way` 冲突 4 处，全部手工解析并入链：
+  - `work-mode`：`WorkspaceView.tsx` 首次到达动画与 A2 模式选择器并存（两块都保留）；`useAssistantChat.ts` 的返回对象补出 `setValue`（预设抽屉写草稿需要）。
+  - `agent-plan-mode`：`AssistantPanel.tsx` 取补丁侧的 `setValue` + plan 模式；`tests/browser/creation_server.py` 把 `assistant_modes` 记录放在上游建议回复夹具之前。
+- 再生成：每张补丁由链上的单次提交导出（`git diff` 相邻提交），原 `#` 头注释逐字保留。从干净的 `8258d4b` 用普通 `git apply` 顺序重放，与链头树完全一致（差异 0 行）。
+- 验证（沙箱，新基线）：
+  - `tsc --noEmit` ✅、`check:i18n` ✅（3381 keys，0 problems）、`npm run build` ✅、上游 `npm test` ✅（970 通过）。
+  - 本仓库 `unittest` 39/39 ✅。
+  - 浏览器旅程全部 PASS：`agent_round_undo` zh/en；`agent_plan_mode` zh/en；`work_mode` zh/en；`timeline_output_dismiss`；`export_signal_contract`（data-od-exporting 13/40 采样命中）；`open_elsewhere_autoretry`（无点击自动进入）。
+  - 九章全量录屏 `delivery/r5-upstream-8258d4b-full-journey.mp4`（112 s，1500×950，H.264，SHA256SUMS 已登记）。
+- 未完成：Windows 车道对新基线尚未运行（见 R5-0 的说明与决策 A）。

@@ -9,10 +9,10 @@
 #    (3287 keys, 0 problems).
 #
 diff --git a/src/i18n/messages/en-US/errors.ts b/src/i18n/messages/en-US/errors.ts
-index dc72cfc..b73cb6b 100644
+index 53f39dcf..f0e957d5 100644
 --- a/src/i18n/messages/en-US/errors.ts
 +++ b/src/i18n/messages/en-US/errors.ts
-@@ -771,7 +771,7 @@ export const errors = {
+@@ -775,7 +775,7 @@ export const errors = {
    "errors.render.mp4Even":
      "MP4 width and height must be even. Adjust the timeline size.",
    "errors.render.mp4H264":
@@ -22,10 +22,10 @@ index dc72cfc..b73cb6b 100644
      "Could not initialize AAC audio encoding. Reopen the page and try again. On Windows N/KN editions, install the Media Feature Pack first.",
    "errors.render.noFile": "Video encoding did not return a file.",
 diff --git a/src/i18n/messages/zh-CN/errors.ts b/src/i18n/messages/zh-CN/errors.ts
-index e7de91a..c62ec34 100644
+index 953397bf..0f254bbf 100644
 --- a/src/i18n/messages/zh-CN/errors.ts
 +++ b/src/i18n/messages/zh-CN/errors.ts
-@@ -580,7 +580,7 @@ export const errors = {
+@@ -584,7 +584,7 @@ export const errors = {
    "errors.render.mp4Invalid": "导出时长或帧率无效。",
    "errors.render.mp4Even": "MP4 的宽度与高度需要为偶数，请调整时间线尺寸。",
    "errors.render.mp4H264":

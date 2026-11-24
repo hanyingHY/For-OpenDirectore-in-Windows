@@ -23,7 +23,7 @@
 # running turn, so they no longer depend on the window lease. Existing
 # catalogs gain the owner column on first open.
 diff --git a/apps/api/src/opendirector_api/agent.py b/apps/api/src/opendirector_api/agent.py
-index ac2b194..f6f39e5 100644
+index b6181b10..70c74928 100644
 --- a/apps/api/src/opendirector_api/agent.py
 +++ b/apps/api/src/opendirector_api/agent.py
 @@ -110,6 +110,13 @@ def reused_ids(value):
@@ -60,7 +60,7 @@ index ac2b194..f6f39e5 100644
      def update(self, project_id: UUID, session: str | None = None, *, draft: Draft | None = None,
                 begin: dict | None = None, finish: dict | None = None, conversation_id: UUID | None = None,
                 before_begin=None) -> dict:
-@@ -347,8 +367,10 @@ def agent_routes(projects, generation, configs, provider=None, *, active=None) -
+@@ -411,8 +431,10 @@ def agent_routes(projects, generation, configs, provider=None, *, active=None) -
          return [{key: item[key] for key in ('name', 'description', 'source')} for item in found]
  
      @router.post('/turns/{turn_id}/stop')
@@ -73,7 +73,7 @@ index ac2b194..f6f39e5 100644
          running = active.get(project_id)
          if running and running[0] == turn_id:
              with CancelScope(shield=True):
-@@ -360,6 +382,7 @@ def agent_routes(projects, generation, configs, provider=None, *, active=None) -
+@@ -424,6 +446,7 @@ def agent_routes(projects, generation, configs, provider=None, *, active=None) -
  
      @router.get('/turns/{turn_id}/events')
      async def turn_events(project_id: UUID, turn_id: UUID):
@@ -81,7 +81,7 @@ index ac2b194..f6f39e5 100644
          await asyncio.to_thread(conversations.path, project_id)
          running = active.get(project_id)
          if not running or running[0] != turn_id:
-@@ -407,6 +430,8 @@ def agent_routes(projects, generation, configs, provider=None, *, active=None) -
+@@ -471,6 +494,8 @@ def agent_routes(projects, generation, configs, provider=None, *, active=None) -
                      current = configs.resolve(str(value.modelId), 'agent')
                      generation.availability.require(current, _assistant_request(current), prepared)
              async def produce() -> None:
@@ -90,7 +90,7 @@ index ac2b194..f6f39e5 100644
                  text, status, error, accepted = '', 'complete', None, False
                  activities = []
                  sources = {}
-@@ -420,7 +445,7 @@ def agent_routes(projects, generation, configs, provider=None, *, active=None) -
+@@ -484,7 +509,7 @@ def agent_routes(projects, generation, configs, provider=None, *, active=None) -
                          'skills': value.skills, 'runtime': value.runtime, 'runtimeModel': value.runtimeModel,
                          'modelSelections': dict(value.modelSelections),
                          'model': model, 'modelIsCliDefault': model_is_cli_default, 'status': 'complete'}
@@ -99,7 +99,7 @@ index ac2b194..f6f39e5 100644
                          conversation_id=value.conversationId, before_begin=validate_connection)
                      accepted = True
                      events.put({'type': 'start', 'conversation': saved})
-@@ -444,7 +469,7 @@ def agent_routes(projects, generation, configs, provider=None, *, active=None) -
+@@ -508,7 +533,7 @@ def agent_routes(projects, generation, configs, provider=None, *, active=None) -
                          context[-1]['content'] += '\nUser model preferences for this turn: ' + json.dumps(preferences, ensure_ascii=False)
                          context[-1]['content'] += '\nUse these models for new generation unless the user explicitly requests another. If unavailable or unsuitable, explain and ask before substituting. Keep existing nodes on their configured models unless the user requests a change.'
                      run = RunContext(runtime=value.runtime, project_id=project_id, turn_id=value.id,
@@ -108,7 +108,7 @@ index ac2b194..f6f39e5 100644
                          selected_skills=value.skills, thinking=value.thinking, model_selections=model_selections,
                          runtime_model=value.runtimeModel, skills=available, conversation_id=UUID(saved['conversationId']))
                      async with aclosing(runtimes.stream(run)) as stream:
-@@ -489,28 +514,36 @@ def agent_routes(projects, generation, configs, provider=None, *, active=None) -
+@@ -553,28 +578,36 @@ def agent_routes(projects, generation, configs, provider=None, *, active=None) -
                              status=500, code='operation_rejected')
                      logger.exception(f'agent.turn.failed project_id={project_id} turn_id={value.id}')
                  finally:
@@ -158,7 +158,7 @@ index ac2b194..f6f39e5 100644
              # Closing this stream (switching projects, reloading) only detaches
              # the viewer; the run continues and can be attached again.
 diff --git a/packages/core/src/opendirector/infrastructure/local_projects.py b/packages/core/src/opendirector/infrastructure/local_projects.py
-index 2e515e9..293dcb0 100644
+index 2e515e9d..293dcb0e 100644
 --- a/packages/core/src/opendirector/infrastructure/local_projects.py
 +++ b/packages/core/src/opendirector/infrastructure/local_projects.py
 @@ -8,6 +8,7 @@ import sqlite3
@@ -210,7 +210,7 @@ index 2e515e9..293dcb0 100644
              db.execute("DELETE FROM sessions WHERE id=?", (session,))
 diff --git a/tests/browser/agent_lease_switch.mjs b/tests/browser/agent_lease_switch.mjs
 new file mode 100644
-index 0000000..a836203
+index 00000000..a8362035
 --- /dev/null
 +++ b/tests/browser/agent_lease_switch.mjs
 @@ -0,0 +1,156 @@
@@ -371,7 +371,7 @@ index 0000000..a836203
 +  await browser.close();
 +}
 diff --git a/tests/browser/creation_server.py b/tests/browser/creation_server.py
-index a0b78c9..3d2072c 100644
+index 4a8e950b..a968fc18 100644
 --- a/tests/browser/creation_server.py
 +++ b/tests/browser/creation_server.py
 @@ -153,6 +153,29 @@ if args.http_generation_fixture:
@@ -404,8 +404,8 @@ index a0b78c9..3d2072c 100644
  if args.assistant_fixture:
      from opendirector_api import agent
  
-@@ -160,6 +183,8 @@ if args.assistant_fixture:
-         assistant_contexts.append(run.messages)
+@@ -170,6 +193,8 @@ if args.assistant_fixture:
+             return
          yield {'type': 'delta', 'text': '已收到创作要求。'}
          await assistant_gate.wait()
 +        while assistant_write_names:
@@ -413,7 +413,7 @@ index a0b78c9..3d2072c 100644
          yield {'type': 'delta', 'text': '这是隔离测试回复。'}
  
      agent.AgentRuntimes.stream = fixture_agent
-@@ -195,10 +220,17 @@ def health():
+@@ -205,10 +230,17 @@ def health():
      return dict(isolated=True, provider='fixture', root=str(root),
                  calls=http_generation_calls if args.http_generation_fixture else provider.calls, toolCalls=tool_calls,
                  selectionCalls=selection_calls, selectionActive=selection_active, imageEditCalls=image_edit_calls,
@@ -433,7 +433,7 @@ index a0b78c9..3d2072c 100644
  async def gate_assistant(request: Request):
      if (await request.json()).get('open') is True:
 diff --git a/tests/browser/manifest.json b/tests/browser/manifest.json
-index 3d6cc8c..ad5a4c2 100644
+index da72ffc5..67c8dbbe 100644
 --- a/tests/browser/manifest.json
 +++ b/tests/browser/manifest.json
 @@ -80,6 +80,16 @@
@@ -455,7 +455,7 @@ index 3d6cc8c..ad5a4c2 100644
        "fixture": true,
 diff --git a/tests/test_agent_run_lease.py b/tests/test_agent_run_lease.py
 new file mode 100644
-index 0000000..6e29762
+index 00000000..6e297629
 --- /dev/null
 +++ b/tests/test_agent_run_lease.py
 @@ -0,0 +1,217 @@

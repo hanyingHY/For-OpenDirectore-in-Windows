@@ -32,13 +32,23 @@ else
 fi
 
 # Apply the patch series in lexical order. Reset to pristine state first so the
-# script is idempotent.
+# script is idempotent. Git Bash on Windows does not ship `patch`, so fall back
+# to `git apply` (equivalent -p1 semantics, --forward keeps reruns safe).
 if [ -d "$DEST/.git" ]; then
   git -C "$DEST" checkout -- . 2>/dev/null || true
 fi
 shopt -s nullglob
 for patch in "$ROOT"/patches/*.patch; do
   echo "vendor: applying $(basename "$patch")"
-  patch -d "$DEST" -p1 --forward --batch < "$patch"
+  if command -v patch >/dev/null 2>&1; then
+    patch -d "$DEST" -p1 --forward --batch < "$patch"
+  elif git -C "$DEST" apply -p1 --whitespace=nowarn "$patch" 2>/dev/null; then
+    :
+  elif git -C "$DEST" apply -R -p1 --check "$patch" 2>/dev/null; then
+    echo "vendor: $(basename "$patch") already applied"
+  else
+    echo "vendor: failed to apply $(basename "$patch")" >&2
+    exit 1
+  fi
 done
 echo "vendor: ready at $DEST"

@@ -19,7 +19,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Install dependencies
         run: npm ci || npm install
@@ -28,7 +28,20 @@ jobs:
         run: npm test
 
       - name: Prepare runtime cache
-        run: node scripts/prepare-runtime.mjs
+        shell: bash
+        working-directory: .
+        env:
+          OPENDIRECTOR_REF: 8258d4b016496d81a7c824e4cdfa42f3c840d5eb
+        run: |
+          bash scripts/vendor-upstream.sh
+          python -m pip install --quiet uv
+          mkdir -p _ffmpeg _ffbin
+          curl -sSL -o _ffmpeg/ffmpeg.zip "https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip"
+          cd _ffmpeg && unzip -q ffmpeg.zip && cd ..
+          cp "$(find _ffmpeg -name ffmpeg.exe | head -1)" _ffbin/
+          cp "$(find _ffmpeg -name ffprobe.exe | head -1)" _ffbin/
+          export OPENDIRECTOR_FFMPEG_DIR="$PWD/_ffbin"
+          node windows/scripts/prepare-runtime.mjs
 
       - name: Build NSIS installer
         run: npx electron-builder --win nsis
@@ -40,8 +53,8 @@ jobs:
         with:
           name: opendirector-windows-installer
           path: |
-            windows/dist/*.exe
-            windows/dist/*.yml
+            windows/build/*.exe
+            windows/build/*.yml
           if-no-files-found: error
 
   smoke:

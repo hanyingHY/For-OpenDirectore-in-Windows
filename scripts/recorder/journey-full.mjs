@@ -197,6 +197,15 @@ export async function runFullJourney(director, { web, api = 'http://127.0.0.1:80
     await director.wait(5500);
     await director.frame('video generated');
     await director.caption('Image and video models share one production pipeline / 图像与视频共用一条生成管线', { frames: 2, holdMs: 800 });
+    // Windows shell wiring: the desktop bridge must mirror task activity on the
+    // taskbar (indeterminate while busy) and clear it once everything settles.
+    const desktopCalls = await page.evaluate(() => window.__desktopCalls ?? []);
+    const taskbar = desktopCalls.filter(call => call[0] === 'taskProgress');
+    console.log(JSON.stringify({
+      taskbarBusy: taskbar.some(call => call[2] === 'indeterminate'),
+      taskbarCleared: taskbar.some(call => call[1] === null && call[2] === undefined),
+      taskbarCalls: taskbar.length,
+    }));
     // Clear the stage for the import section: close the generation composer
     // and collapse the assistant panel.
     await click('Close generation panel');

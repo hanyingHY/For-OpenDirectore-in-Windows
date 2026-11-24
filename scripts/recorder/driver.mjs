@@ -36,9 +36,13 @@ export class Director {
       (() => {
         // Desktop bridge stub: the Web UI switches to the desktop layout when
         // window.opendirectorDesktop exists (same contract as the Electron preload).
+        window.__desktopCalls = [];
         window.opendirectorDesktop = {
-          registerSession() {}, setLocale() {}, setTheme() {}, setExporting() {},
-          setTaskProgress() {}, notify() {}, showMore() {}, reportActivity() {},
+          registerSession() {}, setLocale() {}, setTheme() {},
+          setExporting: a => window.__desktopCalls.push(['exporting', a]),
+          setTaskProgress: (v, m) => window.__desktopCalls.push(['taskProgress', v, m]),
+          notify: p => window.__desktopCalls.push(['notify', p && p.title]),
+          showMore() {}, reportActivity() {},
           requestTakeover: async () => ({ ok: true }),
           onOpenTarget() {}, platform: 'win32',
         };
